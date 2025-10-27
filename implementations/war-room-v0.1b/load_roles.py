@@ -1,3 +1,5 @@
+# Timestamp: 2025-10-27 04:40:38 UTC
+# Hash: 505f7db691fb01d5fd8525ab3ed9226d794df0198af6054c6a6271c155f469cd
 """
 AxProtocol Role Loader - Multi-Domain Support
 Loads role definitions based on domain and build type

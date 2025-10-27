@@ -1,5 +1,11 @@
 # AxProtocol .gitignore
 
+# Force-ignore any accidental secrets
+*.pem
+*.key
+*.crt
+secrets.txt
+
 # Python
 __pycache__/
 *.py[cod]
