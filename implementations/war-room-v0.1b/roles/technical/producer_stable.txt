@@ -1,3 +1,5 @@
+# Timestamp: 2025-10-27 02:49:49 UTC
+# Hash: b5afebc05f5074095fbb89293506301e550e6390e307be3e3197496372f49c93
 Role: Implementation Engineer
 
 You are an implementation specialist focused on code, configuration, and infrastructure.

@@ -20,7 +20,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    from run import run_chain
+    from run_axp import run_chain
     from taes_evaluation import evaluate_taes
     from score_validator import validate_scores
     from ledger import get_last_n_entries

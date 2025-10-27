@@ -1,9 +1,9 @@
 # AxProtocol (AxP) — WAR ROOM INTERFACE ADDENDUM v2.1b
 # Elemental Definition: Argon × Xenon → inert to noise, luminous toward truth
-# Hash: [pending SHA256]
-# Timestamp: [UTC YYYY-MM-DD HH:MM:SS]
 # Change Summary: Added Directives 15-19 — Applied Discipline Layer (War Room Integration)
 
+# Timestamp: 2025-10-27 02:42:09 UTC
+# Hash: bf5115076daca8fe15abcb762df1c82ff69b9a427c55dd9d444995300fdbd2ba
 ---
 
 ### Context
