@@ -40,9 +40,9 @@ except Exception as e:
 # 🔥 NEW: Initialize domain detector at startup
 try:
     domain_detector = DomainDetector()
-    print("✅ Domain detector initialized")
+    print("[OK] Domain detector initialized")
 except Exception as e:
-    print(f"⚠️ Domain detector unavailable: {e}")
+    print(f"[WARN] Domain detector unavailable: {e}")
     domain_detector = None
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ MODEL_MAP = {
     "CLIENT": os.getenv("MODEL_CLIENT", "gpt-4o"),
 }
 MODEL = MODEL_MAP.get(TIER, "gpt-4o-mini")
-print(f"[AxProtocol] Tier={TIER}  →  Model={MODEL}")
+print(f"[AxProtocol] Tier={TIER}  ->  Model={MODEL}")
 
 # 🔥 REMOVED: Static DOMAIN variable (now detected per-objective)
 # Old: DOMAIN = os.getenv("DOMAIN", "marketing").lower()
@@ -83,7 +83,7 @@ BRIEFINGS = {
     "core":  "Enforce AxProtocol Core (1–14): truth discipline, logic integrity, contradiction detection.",
     "add":   "Apply War-Room Addendum (15–19): objective grounding, scoring ≥85, handoff, efficiency, client-readiness.",
     "aal":   "Respect Authority Assertion (20–24): Operator supremacy, CAM lease, immutable ledger, killchain, drift monitor.",
-    "taes":  "Use TAES (25–25c): weigh Logical/Practical/Probable, IRD>0.5 → RRP.",
+    "taes":  "Use TAES (25–25c): weigh Logical/Practical/Probable, IRD>0.5 -> RRP.",
     "rdl":   "Red-Team Layer (26–28): falsification MAS, CV detection, residual risk, structured dissent.",
 }
 
@@ -101,20 +101,20 @@ STRATEGIST = ANALYST = PRODUCER = COURIER = CRITIC = None
 def load_domain_roles(domain: str) -> dict:
     """
     Load roles for a specific domain.
-    
+
     Args:
-        domain: Domain name (e.g., 'marketing', 'technical', 'ops')
-    
+        domain: Domain name (e.g., 'marketing', 'technical', 'ops', 'creative', 'education', 'product', 'strategy', 'research')
+
     Returns:
         Dictionary with role contents
     """
     try:
         from load_roles import load_roles_by_pattern
         BUILD_TYPE = os.getenv("BUILD_TYPE", "stable")
-        
+
         # 🔥 NEW: Pass domain to role loader
         _roles = load_roles_by_pattern(BUILD_TYPE, domain)
-        
+
         print(f"✅ Loaded {domain} domain roles ({BUILD_TYPE})")
         return {
             'strategist': _roles["strategist"]["content"],
@@ -132,7 +132,7 @@ def load_domain_roles(domain: str) -> dict:
                 "Be decisive; ground in objective. End with KPI or action (Directive 15)."
             ),
             'analyst': (
-                "Role: Analyst. Pressure-test assumptions; risks→mitigations; 3 KPIs with numeric targets; "
+                "Role: Analyst. Pressure-test assumptions; risks->mitigations; 3 KPIs with numeric targets; "
                 "A/B plan; short validation table. Prioritize 95% workable now. Score ≥85."
             ),
             'producer': (
@@ -145,7 +145,7 @@ def load_domain_roles(domain: str) -> dict:
             ),
             'critic': (
                 "Role: Critic. Audit for compliance, clarity, proof, CTA power, local tone. "
-                "List 'Issue→Fix' pairs, give five 0–100 ratings + average. If <85, revise once, re-score."
+                "List 'Issue->Fix' pairs, give five 0–100 ratings + average. If <85, revise once, re-score."
             ),
         }
 
@@ -177,7 +177,7 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
     - Ledger logging
     - CAM lease tracking
     - RRP trigger on high IRD
-    
+
     Args:
         objective: The campaign/project objective
         session_id: Optional session identifier
@@ -202,7 +202,7 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
         scores = domain_detector._score_all_domains(objective)
         confidence = scores.get(detected_domain, 0.0)
         print(f"[AxProtocol] Auto-detected domain: {detected_domain.upper()} (confidence: {confidence:.2f})")
-        
+
         # Show top 3 for transparency
         top_3 = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:3]
         top_str = ", ".join([f"{d}({s:.2f})" for d, s in top_3])
@@ -247,13 +247,13 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
 
     # 🔥 UPDATED: TAES evaluation with detected domain
     taes_s = evaluate_taes(s, domain=detected_domain, session_id=session_id, role_name="Strategist")
-    print(f"   TAES → IV: {taes_s['integrity_vector']}, IRD: {taes_s['ird']}")
+    print(f"   TAES -> IV: {taes_s['integrity_vector']}, IRD: {taes_s['ird']}")
 
     # Score validation
     scores_s = extract_scores(s)
     if scores_s:
         validation_s = validate_scores(scores_s, threshold=85)
-        print(f"   Scores → {validation_s['reason']}")
+        print(f"   Scores -> {validation_s['reason']}")
         if not validation_s['valid']:
             print(f"   ⚠️ Below threshold: {validation_s['below_threshold']}")
 
@@ -282,12 +282,12 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
 
     # 🔥 UPDATED: TAES with domain
     taes_a = evaluate_taes(a, domain=detected_domain, session_id=session_id, role_name="Analyst")
-    print(f"   TAES → IV: {taes_a['integrity_vector']}, IRD: {taes_a['ird']}")
+    print(f"   TAES -> IV: {taes_a['integrity_vector']}, IRD: {taes_a['ird']}")
 
     scores_a = extract_scores(a)
     if scores_a:
         validation_a = validate_scores(scores_a, threshold=85)
-        print(f"   Scores → {validation_a['reason']}")
+        print(f"   Scores -> {validation_a['reason']}")
 
     results['analyst'] = {
         'output': a,
@@ -314,7 +314,7 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
 
     # 🔥 UPDATED: TAES with domain
     taes_p = evaluate_taes(p_draft, domain=detected_domain, session_id=session_id, role_name="Producer-Draft")
-    print(f"   TAES → IV: {taes_p['integrity_vector']}, IRD: {taes_p['ird']}")
+    print(f"   TAES -> IV: {taes_p['integrity_vector']}, IRD: {taes_p['ird']}")
 
     results['producer_draft'] = {
         'output': p_draft,
@@ -340,7 +340,7 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
 
     # 🔥 UPDATED: TAES with domain
     taes_c = evaluate_taes(c_draft, domain=detected_domain, session_id=session_id, role_name="Courier-Draft")
-    print(f"   TAES → IV: {taes_c['integrity_vector']}, IRD: {taes_c['ird']}")
+    print(f"   TAES -> IV: {taes_c['integrity_vector']}, IRD: {taes_c['ird']}")
 
     results['courier_draft'] = {
         'output': c_draft,
@@ -366,7 +366,7 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
 
     # 🔥 UPDATED: TAES with domain
     taes_crit = evaluate_taes(crit, domain=detected_domain, session_id=session_id, role_name="Critic")
-    print(f"   TAES → IV: {taes_crit['integrity_vector']}, IRD: {taes_crit['ird']}")
+    print(f"   TAES -> IV: {taes_crit['integrity_vector']}, IRD: {taes_crit['ird']}")
 
     results['critic'] = {
         'output': crit,
@@ -376,7 +376,7 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
     scores_crit = extract_scores(crit)
     if scores_crit:
         validation_crit = validate_scores(scores_crit, threshold=85)
-        print(f"   Scores → {validation_crit['reason']}")
+        print(f"   Scores -> {validation_crit['reason']}")
 
     # ────────────────────────────────────────────────────────────────────────
     # PRODUCER (revised)
@@ -397,7 +397,7 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
 
     # 🔥 UPDATED: TAES with domain
     taes_p_rev = evaluate_taes(p_rev, domain=detected_domain, session_id=session_id, role_name="Producer-Revised")
-    print(f"   TAES → IV: {taes_p_rev['integrity_vector']}, IRD: {taes_p_rev['ird']}")
+    print(f"   TAES -> IV: {taes_p_rev['integrity_vector']}, IRD: {taes_p_rev['ird']}")
 
     # RRP check (Directive 25)
     if taes_p_rev['requires_rrp']:
@@ -427,7 +427,7 @@ def run_chain(objective: str, session_id: Optional[str] = None, domain: Optional
 
     # 🔥 UPDATED: TAES with domain
     taes_c_rev = evaluate_taes(c_rev, domain=detected_domain, session_id=session_id, role_name="Courier-Revised")
-    print(f"   TAES → IV: {taes_c_rev['integrity_vector']}, IRD: {taes_c_rev['ird']}")
+    print(f"   TAES -> IV: {taes_c_rev['integrity_vector']}, IRD: {taes_c_rev['ird']}")
 
     if taes_c_rev['requires_rrp']:
         print(f"   ⚠️ IRD > 0.5 detected - Reality Reconciliation Pass recommended")
@@ -493,25 +493,25 @@ def log_session(objective, s, a, p_rev, c_rev, crit, results):
         # Add TAES data
         if 'strategist' in results:
             taes = results['strategist']['taes']
-            f.write(f"TAES → IV: {taes['integrity_vector']}, IRD: {taes['ird']}, RRP: {taes['requires_rrp']}\n\n")
+            f.write(f"TAES -> IV: {taes['integrity_vector']}, IRD: {taes['ird']}, RRP: {taes['requires_rrp']}\n\n")
 
         f.write("## ANALYST\n" + a + "\n\n")
 
         if 'analyst' in results:
             taes = results['analyst']['taes']
-            f.write(f"TAES → IV: {taes['integrity_vector']}, IRD: {taes['ird']}, RRP: {taes['requires_rrp']}\n\n")
+            f.write(f"TAES -> IV: {taes['integrity_vector']}, IRD: {taes['ird']}, RRP: {taes['requires_rrp']}\n\n")
 
         f.write("## PRODUCER [Revised]\n" + p_rev + "\n\n")
 
         if 'producer_revised' in results:
             taes = results['producer_revised']['taes']
-            f.write(f"TAES → IV: {taes['integrity_vector']}, IRD: {taes['ird']}, RRP: {taes['requires_rrp']}\n\n")
+            f.write(f"TAES -> IV: {taes['integrity_vector']}, IRD: {taes['ird']}, RRP: {taes['requires_rrp']}\n\n")
 
         f.write("## COURIER [Revised]\n" + c_rev + "\n\n")
 
         if 'courier_revised' in results:
             taes = results['courier_revised']['taes']
-            f.write(f"TAES → IV: {taes['integrity_vector']}, IRD: {taes['ird']}, RRP: {taes['requires_rrp']}\n\n")
+            f.write(f"TAES -> IV: {taes['integrity_vector']}, IRD: {taes['ird']}, RRP: {taes['requires_rrp']}\n\n")
 
         f.write("## CRITIC\n" + crit + "\n")
 
@@ -553,13 +553,13 @@ def main():
     # 🔥 NEW: Check for domain override as last argument
     domain_override = None
     args = sys.argv[1:]
-    
+
     # Check if last arg is a domain name
-    if args and args[-1].lower() in ['marketing', 'technical', 'ops', 'creative', 
+    if args and args[-1].lower() in ['marketing', 'technical', 'ops', 'creative',
                                        'education', 'product', 'strategy', 'research']:
         domain_override = args[-1].lower()
         args = args[:-1]  # Remove domain from args
-    
+
     if args:
         objective = " ".join(args)
     else:

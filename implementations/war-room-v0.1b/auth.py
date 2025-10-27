@@ -1,3 +1,5 @@
+# Timestamp: 2025-10-27 02:51:16 UTC
+# Hash: 2cb4de71ffaa9a6704f77ba0c12aa23809efff88d41b7ccb114415a8cbd482a5
 """
 AxProtocol Authority Assertion Layer — OP_AUTH token management
 Implements Operator Supremacy (D20) and CAM leases (D21).

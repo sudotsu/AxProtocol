@@ -3,6 +3,8 @@
 # Change Summary: Added Directives 26–28 (Red-Team & Devil’s-Advocate Governance)
 # Variant: _VARIANT-RDL-v0.1
 
+# Timestamp: 2025-10-27 02:40:33 UTC
+# Hash: 7c512ad440591f920f9c67cafe18f298a3f554b034329a247afd4b46e2e7142c
 ---
 
 ### Context
