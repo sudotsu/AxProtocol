@@ -1,7 +1,0 @@
-Engine (LLM)
-   ↓
-Protocol / Architecture  ← you live here
-   ↓
-Products / Experiences
-   ↓
-End users
