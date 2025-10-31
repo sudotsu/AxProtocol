@@ -38,6 +38,7 @@ import pytest
 
 from score_validator import evaluate_text
 from run_axp import run_once
+from axp.governance.coupling import initialize_schema
 
 
 # ---------- Constants & Fixtures ----------
@@ -185,6 +186,16 @@ def test_kernel_taes_consistency_on_final_output() -> None:
     assert kernel_scores["requires_rrp"] == (k_ird > 0.5), (
         "Kernel requires_rrp must be True iff IRD > 0.5"
     )
+
+
+def test_schema_load_success() -> None:
+    """Schema bootstrap should succeed even if config files are missing/empty."""
+    data = initialize_schema()
+    assert isinstance(data, dict), "initialize_schema() must return a dict"
+    # Ensure keys exist and are non-empty
+    for k in ("S", "A", "C", "X"):
+        assert k in data, f"Schema missing key: {k}"
+        assert isinstance(data[k], dict) and len(data[k]) > 0, f"Schema section {k} not properly initialized"
 
 
 # ---------- How to run & expected output (documentation only) ----------

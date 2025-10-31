@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+from axp.governance.ledger import write_ledger_entry
+
 # Adaptive weighting matrix (Directive 25a)
 ADAPTIVE_MATRIX = {
     "code": {"logical": 0.6, "practical": 0.35, "probable": 0.05},
@@ -184,6 +186,19 @@ Return ONLY valid JSON in this exact format:
         "session_id": session_id,
         "role_name": role_name,
     }
+
+    try:
+        ledger_data = {
+            "domain": domain,
+            "scores": scores,
+            "weights": weights,
+            "session_id": session_id,
+            "role_name": role_name,
+        }
+        ledger_hash = write_ledger_entry("TAES", "evaluation", ledger_data)
+        result["ledger_hash"] = ledger_hash
+    except Exception as exc:
+        logger.warning("TAES ledger logging failed: %s", exc)
 
     # Log to CSV
     _log_ird(result)
