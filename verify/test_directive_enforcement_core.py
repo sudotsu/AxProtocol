@@ -41,6 +41,7 @@ import pytest
 
 from run_axp import run_once
 from score_validator import evaluate_text
+from axp.governance.ledger import write_ledger_entry
 
 
 # ---------- Helpers ----------
@@ -327,6 +328,21 @@ def test_strongest_take_beats_hedged_on_iv() -> None:
         f"Strong output still contains excessive hedging "
         f"(strong={strong_hedges}, hedged={hedged_hedges})."
     )
+
+
+def test_ledger_signatures() -> None:
+    """Ledger entries should include signatures."""
+    import glob
+    import json
+
+    write_ledger_entry("TEST", "validation", {"value": 1})
+    files = glob.glob("logs/ledger/*.jsonl")
+    assert files, "No ledger files found"
+    for file in files:
+        with open(file, "r", encoding="utf8") as f:
+            for line in f:
+                entry = json.loads(line)
+                assert entry.get("sig"), f"Unsigned entry in {file}"
 
 
 # ---------- How to run & expected output (documentation only) ----------

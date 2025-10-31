@@ -319,9 +319,28 @@ def load_roles_by_pattern(build_type: str = "stable", domain: str = "marketing")
             with open(role_path, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
 
+            # Append collaboration contract (non-destructive) to encourage
+            # complementary artifacts and cross-role traceability across domains.
+            collab_contract = (
+                "\n\nCollaboration Contract (Non-Redundancy & Traceability)\n"
+                "- Build on prior roles; do not restate their sections.\n"
+                "- Introduce new artifacts and assign stable IDs (S-1, A-1, P-1, C-1).\n"
+                "- Cross-reference upstream IDs wherever applicable.\n"
+                "- Prefer depth and specificity over general prose.\n"
+            )
+            role_notes = {
+                "strategist": "- Strategist: Assign S-IDs and include an S-ID Index.",
+                "analyst":    "- Analyst: Assign A-IDs and include an A-ID Map referencing S-IDs.",
+                "producer":   "- Producer: Assign P-IDs and reference A-IDs used.",
+                "courier":    "- Courier: Reference P-IDs for each scheduled item; optionally assign C-IDs.",
+                "critic":     "- Critic: Reference S/A/P/C IDs in Issue->Fix entries."
+            }
+            note = role_notes.get(role_name, "")
+            augmented = content + collab_contract + ("\n" + note if note else "")
+
             roles[role_name] = {
                 "name": role_name,
-                "content": content,
+                "content": augmented,
                 "path": str(role_path),
                 "domain": actual_domain,
                 "requested_domain": domain,
