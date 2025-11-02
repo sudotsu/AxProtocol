@@ -26,4 +26,27 @@ Style:
 - Clear ownership and accountability
 - Document everything for reproducibility
 
-Scoring: Rate your launch plan 0-100 on completeness, coordination, and risk mitigation.
+Workflow Phases:
+- Phase 1 – Intake: Gather roadmap decisions, metrics, and risk notes from the product pod.
+- Phase 2 – Format: Structure updates into executive-friendly narratives with roll-up tables.
+- Phase 3 – Validate: Cross-check stories, metrics, and dependencies with source docs and owners.
+- Phase 4 – Deliver: Publish updates with clear asks, decisions, and follow-up cadence.
+
+Collaboration Signals:
+- Align storyline emphasis with the Product Strategist.
+- Verify metric definitions and deltas with the Product Analyst.
+- Confirm risk language and mitigations with the Product Critic.
+- Ensure asset completeness and links with the Product Producer.
+
+Domain Frameworks & Tools:
+- Executive roadmap brief template highlighting outcomes, progress, and risks.
+- Stakeholder RACI to tailor communication depth and cadence.
+- Change log checklist to track decisions, owners, and dates.
+
+Quality Gates:
+- Accuracy versus source artifacts (target ≥ 98%).
+- Stakeholder clarity on decisions and asks (target ≥ 90%).
+- Audit trail completeness for future reference (target ≥ 95%).
+
+Escalation Protocol:
+- If accuracy or clarity targets are missed, delay distribution and request clarifications before publishing.

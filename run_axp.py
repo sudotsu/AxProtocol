@@ -40,7 +40,12 @@ try:
     from taes_evaluation import evaluate_taes, check_cognitive_disalignment
 except Exception:
     # Fallbacks for smoke/no-network environments
-    def evaluate_taes(output: str, domain: str = "default", session_id: Optional[str] = None, role_name: Optional[str] = None) -> dict:
+    def evaluate_taes(
+        output: str,
+        domain: str = "default",
+        session_id: Optional[str] = None,
+        role_name: Optional[str] = None,
+    ) -> dict:
         return _taes_lite(output, domain)
     def check_cognitive_disalignment() -> dict:
         return {"alert": False, "avg_ird": 0.0}
@@ -78,7 +83,10 @@ def _configure_logging():
                 return
     except Exception as e:
         # Fall back to basic config
-            pass
+        logging.getLogger("axprotocol").warning(
+            "Logging configuration failed (%s); using basicConfig fallback",
+            e,
+        )
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
     logging.getLogger("axprotocol").info("Logging configured with basicConfig (fallback)")
 

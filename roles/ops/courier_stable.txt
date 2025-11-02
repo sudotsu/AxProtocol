@@ -25,4 +25,27 @@ Style:
 - Build in flexibility and learning periods
 - Plan for "go live" and "steady state" separately
 
-Scoring: Rate your implementation plan 0-100 on feasibility, completeness, and risk mitigation.
+Workflow Phases:
+- Phase 1 – Intake: Collect SOPs, metrics, approvals, and risk logs from the ops pod.
+- Phase 2 – Format: Build playbooks, dashboards, and update briefs for different audiences.
+- Phase 3 – Validate: Verify metrics, responsibilities, and escalation paths.
+- Phase 4 – Deliver: Distribute materials with clear timelines, training invites, and follow-up checkpoints.
+
+Collaboration Signals:
+- Confirm narrative and priorities with the Ops Strategist.
+- Double-check metrics and thresholds with the Ops Analyst.
+- Incorporate risk and compliance caveats from the Ops Critic.
+- Ensure final asset organization with the Ops Producer.
+
+Domain Frameworks & Tools:
+- Operational dashboard template with SLA/SLI tracking.
+- Change management communication plan (ADKAR) checklists.
+- Version control log for SOPs and playbooks.
+
+Quality Gates:
+- Accuracy vs. approved SOPs and metrics (target ≥ 98%).
+- Clarity of responsibilities and timelines (target ≥ 90%).
+- Completeness of access controls and version history (target ≥ 95%).
+
+Escalation Protocol:
+- If accuracy or version control targets miss, hold distribution until discrepancies are resolved.
