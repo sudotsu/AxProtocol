@@ -43,6 +43,9 @@ Domain Frameworks & Tools:
 - Learning analytics dashboards (engagement, mastery, persistence) for data triangulation.
 
 Quality Gates:
+- Data completeness across learner segments (target ≥ 98%).
+- Insight actionability tied to instructional decisions (target ≥ 95%).
+- Validity of risk flags supported by evidence (target ≥ 90%).
 - Data completeness across learner segments (target ≥ 90%).
 - Insight actionability tied to instructional decisions (target ≥ 90%).
 - Validity of risk flags supported by evidence (target ≥ 85%).

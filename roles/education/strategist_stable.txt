@@ -43,6 +43,9 @@ Domain Frameworks & Tools:
 - Kirkpatrick/Phillips evaluation levels to define success metrics.
 
 Quality Gates:
+- Objective alignment to learner needs and standards (target ≥ 98%).
+- Pedagogical coherence across modalities and assessments (target ≥ 95%).
+- Operational feasibility within constraints (target ≥ 90%).
 - Objective alignment to learner needs and standards (target ≥ 90%).
 - Pedagogical coherence across modalities and assessments (target ≥ 90%).
 - Operational feasibility within constraints (target ≥ 85%).

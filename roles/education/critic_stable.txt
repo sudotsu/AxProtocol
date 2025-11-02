@@ -51,6 +51,9 @@ Domain Frameworks & Tools:
 - Risk register template prioritizing severity, likelihood, and mitigation owners.
 
 Quality Gates:
+- Thoroughness of compliance and equity checks (target ≥ 98%).
+- Clarity of remediation guidance (target ≥ 95%).
+- Follow-through on mitigation ownership (target ≥ 95%).
 - Thoroughness of compliance and equity checks (target ≥ 95%).
 - Clarity of remediation guidance (target ≥ 90%).
 - Follow-through on mitigation ownership (target ≥ 90%).

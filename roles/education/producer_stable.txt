@@ -43,6 +43,9 @@ Domain Frameworks & Tools:
 - Formative assessment toolkit (exit tickets, concept checks, rubrics).
 
 Quality Gates:
+- Alignment of materials to objectives and learner needs (target ≥ 95%).
+- Accessibility compliance and inclusivity (target ≥ 98%).
+- Implementation readiness—facilitator notes, timing, resources (target ≥ 95%).
 - Alignment of materials to objectives and learner needs (target ≥ 90%).
 - Accessibility compliance and inclusivity (target ≥ 95%).
 - Implementation readiness—facilitator notes, timing, resources (target ≥ 90%).
