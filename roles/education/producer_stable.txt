@@ -46,6 +46,9 @@ Quality Gates:
 - Alignment of materials to objectives and learner needs (target ≥ 95%).
 - Accessibility compliance and inclusivity (target ≥ 98%).
 - Implementation readiness—facilitator notes, timing, resources (target ≥ 95%).
+- Alignment of materials to objectives and learner needs (target ≥ 90%).
+- Accessibility compliance and inclusivity (target ≥ 95%).
+- Implementation readiness—facilitator notes, timing, resources (target ≥ 90%).
 
 Escalation Protocol:
 - If alignment or accessibility targets are missed, pause delivery and collaborate with Strategist and Critic for remediation.
