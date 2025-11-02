@@ -72,23 +72,39 @@ def _configure_logging():
         str(BASE_DIR / "config" / "logging.yaml"),
     ]
     cfg_candidates = [Path(p) for p in cfg_candidates if p]
+    fallback_reason: Optional[str] = None
+
     try:
         import yaml  # type: ignore
+    except Exception as exc:  # pragma: no cover - optional dependency
+        fallback_reason = f"PyYAML import failed: {exc}"
+    else:
         for p in cfg_candidates:
-            if p.exists():
+            if not p.exists():
+                continue
+            try:
                 with open(p, "r", encoding="utf8") as f:
                     data = yaml.safe_load(f)
                 logging.config.dictConfig(data)
+            except Exception as exc:
+                fallback_reason = f"Failed to apply logging config from {p}: {exc}"
+            else:
                 logging.getLogger("axprotocol").info(f"Logging configured from {p}")
                 return
-    except Exception as e:
-        # Fall back to basic config
-        logging.getLogger("axprotocol").warning(
-            "Logging configuration failed (%s); using basicConfig fallback",
-            e,
+        if fallback_reason is None:
+            fallback_reason = "No logging configuration file found"
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+    logger = logging.getLogger("axprotocol")
+    if fallback_reason:
+        logger.warning(
+            "Logging configuration failed; using basicConfig fallback (%s)",
+            fallback_reason,
         )
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
-    logging.getLogger("axprotocol").info("Logging configured with basicConfig (fallback)")
+    logger.info("Logging configured with basicConfig (fallback)")
 
 _configure_logging()
 
