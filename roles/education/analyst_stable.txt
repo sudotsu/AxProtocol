@@ -46,6 +46,9 @@ Quality Gates:
 - Data completeness across learner segments (target ≥ 98%).
 - Insight actionability tied to instructional decisions (target ≥ 95%).
 - Validity of risk flags supported by evidence (target ≥ 90%).
+- Data completeness across learner segments (target ≥ 90%).
+- Insight actionability tied to instructional decisions (target ≥ 90%).
+- Validity of risk flags supported by evidence (target ≥ 85%).
 
 Escalation Protocol:
 - If evidence is weak or critical gaps remain, loop Strategist and Critic before instructional planning proceeds.
