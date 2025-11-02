@@ -340,7 +340,9 @@ def export_session_results(
         for role in ['strategist', 'analyst', 'producer_revised', 'courier_revised']:
             if role in results and 'taes' in results[role]:
                 taes = results[role]['taes']
-                md_content += f"\n**{taes['role_name']}:**  \n"
+                # Handle missing role_name (fallback TAES doesn't include it)
+                role_name = taes.get('role_name', role.replace('_', ' ').title())
+                md_content += f"\n**{role_name}:**  \n"
                 md_content += f"- Integrity Vector: {taes['integrity_vector']}  \n"
                 md_content += f"- IRD: {taes['ird']:.3f}  \n"
                 md_content += f"- RRP Required: {'Yes' if taes['requires_rrp'] else 'No'}  \n"
@@ -359,8 +361,10 @@ def export_session_results(
         for role in ['strategist', 'analyst', 'producer_revised', 'courier_revised']:
             if role in results and 'taes' in results[role]:
                 taes = results[role]['taes']
+                # Handle missing role_name (fallback TAES doesn't include it)
+                role_name = taes.get('role_name', role.replace('_', ' ').title())
                 rows.append({
-                    'role': taes['role_name'],
+                    'role': role_name,
                     'iv': taes['integrity_vector'],
                     'ird': taes['ird'],
                     'rrp_required': taes['requires_rrp'],
@@ -772,8 +776,10 @@ def render_execution_results(execution_data: Dict):
     for role_key in ['strategist', 'analyst', 'producer_revised', 'courier_revised']:
         if role_key in results and 'taes' in results[role_key]:
             taes = results[role_key]['taes']
+            # Handle missing role_name (fallback TAES doesn't include it)
+            role_name = taes.get('role_name', role_key.replace('_', ' ').title())
             taes_data.append({
-                'Role': taes['role_name'],
+                'Role': role_name,
                 'Integrity Vector': taes['integrity_vector'],
                 'IRD': f"{taes['ird']:.3f}",
                 'Status': ' RRP Required' if taes['requires_rrp'] else ' Healthy',
@@ -831,11 +837,11 @@ def render_execution_results(execution_data: Dict):
             with st.expander(f"Advanced: raw {key} JSON", expanded=False):
                 st.json(data)
 
-        
-        
-        
-        
-        
+
+
+
+
+
 
         qa_log = results.get('qa') or {}
         if qa_log:
