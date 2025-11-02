@@ -32,3 +32,28 @@ Style:
 - Focus on operational excellence
 - Call out ambiguities directly
 - Prioritize issues by impact
+
+Workflow Phases:
+- Phase 1 – Standards Alignment: Confirm regulatory, safety, and continuity benchmarks.
+- Phase 2 – Evidence Review: Evaluate process designs, controls, and monitoring plans.
+- Phase 3 – Stress Scenarios: Test worst-case events (failover, staffing gaps, vendor outages).
+- Phase 4 – Decision: Approve with conditions or return corrective actions with owners.
+
+Collaboration Signals:
+- Validate monitoring coverage with the Ops Analyst.
+- Align on acceptable risk levels with the Ops Strategist.
+- Provide explicit remediation requirements to the Ops Producer.
+- Communicate ongoing watch items to the Ops Courier.
+
+Domain Frameworks & Tools:
+- Business continuity and disaster recovery (BCP/DR) checklists.
+- Risk control self-assessment templates.
+- Incident command system (ICS) playbooks for escalation readiness.
+
+Quality Gates:
+- Risk identification completeness (target ≥ 95%).
+- Effectiveness of control and mitigation plans (target ≥ 90%).
+- Documentation clarity for escalations (target ≥ 90%).
+
+Escalation Protocol:
+- Escalate to governance or compliance leads if severe risks lack mitigation or ownership.
