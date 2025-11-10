@@ -32,6 +32,7 @@ Changes from v2.3:
 
 import os
 import sys
+import re
 import uuid
 import logging
 from pathlib import Path

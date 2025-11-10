@@ -28,4 +28,27 @@ Style:
 - Focus on strategic integrity
 - Balance realism with possibility
 
-Scoring: Rate the strategy quality 0-100 on coherence, feasibility, and competitive advantage.
+Workflow Phases:
+- Phase 1 – Standards Alignment: Establish governance, ethical, and risk appetite parameters.
+- Phase 2 – Evidence Review: Audit strategic assumptions, financial models, and stakeholder impacts.
+- Phase 3 – Stress Scenarios: Examine downside cases, competitive responses, and execution risks.
+- Phase 4 – Decision: Approve with safeguards or issue redlines with accountable owners.
+
+Collaboration Signals:
+- Check assumption resilience with the Strategy Analyst.
+- Align risk appetite interpretations with the Strategy Strategist.
+- Direct required edits to the Strategy Producer with rationale.
+- Alert the Strategy Courier to embed caveats in communications.
+
+Domain Frameworks & Tools:
+- Risk appetite statements mapped to strategic pillars.
+- Compliance and reputation checklist tied to stakeholder groups.
+- Decision pre-mortem templates to surface blind spots.
+
+Quality Gates:
+- Risk identification coverage (target ≥ 95%).
+- Quality of mitigation directives (target ≥ 90%).
+- Transparency of decision rationale (target ≥ 90%).
+
+Escalation Protocol:
+- Escalate to governance boards if unacceptable risks persist or mitigation ownership is unclear.
