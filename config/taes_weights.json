@@ -12,5 +12,6 @@
   "strategy": {"logical": 0.45, "practical": 0.35, "probable": 0.2},
   "education": {"logical": 0.45, "practical": 0.35, "probable": 0.2},
   "product": {"logical": 0.45, "practical": 0.35, "probable": 0.2},
-  "research": {"logical": 0.45, "practical": 0.35, "probable": 0.2}
+  "research": {"logical": 0.45, "practical": 0.35, "probable": 0.2},
+  "finance": {"logical": 0.5, "practical": 0.35, "probable": 0.15}
 }

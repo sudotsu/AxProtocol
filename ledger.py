@@ -34,9 +34,17 @@ def init_ledger():
             output_hash TEXT,
             op_auth_present INTEGER DEFAULT 0,
             previous_hash TEXT,
-            current_hash TEXT
+            current_hash TEXT,
+            config_hash TEXT
         )
     """)
+
+    # Migration: Add config_hash column if it doesn't exist (for existing databases)
+    try:
+        cursor.execute("ALTER TABLE audit_log ADD COLUMN config_hash TEXT")
+    except sqlite3.OperationalError:
+        # Column already exists
+        pass
 
     conn.commit()
     conn.close()
@@ -51,7 +59,8 @@ def log_execution(
     output_text: str = "",
     directive: Optional[int] = None,
     delta: Optional[dict] = None,
-    op_auth_present: bool = False
+    op_auth_present: bool = False,
+    config_hash: Optional[str] = None
 ):
     """
     Append entry to immutable ledger.
@@ -77,11 +86,11 @@ def log_execution(
     cursor.execute("""
         INSERT INTO audit_log (
             timestamp, session_id, agent_id, role_name, directive, action,
-            delta, input_hash, output_hash, op_auth_present, previous_hash, current_hash
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            delta, input_hash, output_hash, op_auth_present, previous_hash, current_hash, config_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         timestamp, session_id, agent_id, role_name, directive, action,
-        delta_json, input_hash, output_hash, int(op_auth_present), previous_hash, current_hash
+        delta_json, input_hash, output_hash, int(op_auth_present), previous_hash, current_hash, config_hash
     ))
 
     entry_id = cursor.lastrowid
@@ -106,7 +115,7 @@ def get_last_n_entries(n: int = 5) -> list:
     columns = [
         "id", "timestamp", "session_id", "agent_id", "role_name", "directive",
         "action", "delta", "input_hash", "output_hash", "op_auth_present",
-        "previous_hash", "current_hash"
+        "previous_hash", "current_hash", "config_hash"
     ]
 
     return [dict(zip(columns, row)) for row in rows]

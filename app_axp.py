@@ -30,10 +30,13 @@ import os
 
 # Import AxProtocol components
 try:
-    from run_axp import run_chain, log_session, MODEL, TIER
+    from axp.orchestration import run_chain
+    from axp.utils.session_logging import log_session
+    from run_axp import MODEL, TIER  # Module-level constants
     from ledger import get_last_n_entries, verify_hash_chain
     from taes_evaluation import check_cognitive_disalignment
     from domain_detector import DomainDetector
+    from pathlib import Path as PathLib
 except ImportError as e:
     st.error(f"Failed to import AxProtocol modules: {e}")
     st.stop()
@@ -707,13 +710,15 @@ def render_execute_tab():
         with st.spinner(" Executing AxProtocol reasoning chain..."):
             try:
                 # Run chain with optional domain override
+                base_dir = PathLib(__file__).parent
                 s, a, p_rev, c_rev, crit, results = run_chain(
                     objective,
-                    domain=domain_override if enable_domain_override else None
+                    domain=domain_override if enable_domain_override else None,
+                    base_dir=base_dir
                 )
 
                 # Log session
-                log_file = log_session(objective, s, a, p_rev, c_rev, crit, results)
+                log_file = log_session(objective, s, a, p_rev, c_rev, crit, results, base_dir, TIER, MODEL)
 
                 # Store in session state for display
                 st.session_state['last_execution'] = {

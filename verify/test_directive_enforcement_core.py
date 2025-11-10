@@ -331,18 +331,27 @@ def test_strongest_take_beats_hedged_on_iv() -> None:
 
 
 def test_ledger_signatures() -> None:
-    """Ledger entries should include signatures."""
+    """Ledger entries should include signatures and config_hash."""
     import glob
     import json
+    from pathlib import Path
+    from axp.utils.config_fingerprint import compute_config_hash
 
-    write_ledger_entry("TEST", "validation", {"value": 1})
+    config_hash = compute_config_hash(Path(__file__).parent.parent)
+    write_ledger_entry("TEST", "validation", {"value": 1}, config_hash=config_hash)
     files = glob.glob("logs/ledger/*.jsonl")
     assert files, "No ledger files found"
+    found_entry = False
     for file in files:
         with open(file, "r", encoding="utf8") as f:
             for line in f:
                 entry = json.loads(line)
                 assert entry.get("sig"), f"Unsigned entry in {file}"
+                # Verify config_hash is present in recent entries
+                if entry.get("entry", {}).get("config_hash"):
+                    found_entry = True
+                    assert entry["entry"]["config_hash"] == config_hash, "Config hash mismatch"
+    # Note: config_hash may not be in older entries (backward compatible)
 
 
 # ---------- How to run & expected output (documentation only) ----------

@@ -39,11 +39,29 @@ print(f"[INFO] Environment loaded from: {env_path}")
 # ============================================================================
 
 # FIX 1: Detect and refuse default secrets
-_DEFAULT_SECRETS = {
-    "axp-secret-change-in-production",
-    "axp-refresh-secret-change",
-    "axp-api-secret-change"
-}
+# Load from config if available, otherwise use hardcoded defaults
+def _load_default_secrets() -> set:
+    """Load default secrets from config file for extensibility."""
+    try:
+        config_path = Path(__file__).parent / "config" / "auth_settings.yaml"
+        if config_path.exists():
+            import yaml
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            # Check if default_secrets are defined in config
+            if 'default_secrets' in config:
+                return set(config['default_secrets'])
+    except Exception:
+        pass  # Fall back to hardcoded defaults
+
+    # Hardcoded defaults (fallback)
+    return {
+        "axp-secret-change-in-production",
+        "axp-refresh-secret-change",
+        "axp-api-secret-change"
+    }
+
+_DEFAULT_SECRETS = _load_default_secrets()
 
 SECRET = os.getenv("OP_AUTH_SECRET", "axp-secret-change-in-production")
 REFRESH_SECRET = os.getenv("OP_REFRESH_SECRET", "axp-refresh-secret-change")
@@ -82,7 +100,29 @@ def _validate_secrets():
         error_msg += "\n\n[DEV] Or set AUTH_DEV_MODE=true for development"
         raise RuntimeError(error_msg)
     elif dev_mode:
-        print("[INFO] Running in development mode - using default secrets")
+        # Security improvement: Log dev mode bypasses prominently to audit channel
+        import logging
+        audit_logger = logging.getLogger("axp.auth.dev_bypass")
+        audit_logger.warning(
+            "⚠️ DEV MODE BYPASS ACTIVE - Security validation bypassed",
+            extra={
+                "event": "dev_mode_bypass",
+                "secrets_validated": False,
+                "timestamp": to_utc_iso(utc_now())
+            }
+        )
+        # Also log to audit log file
+        log_auth_event(AuthEvent(
+            timestamp=to_utc_iso(utc_now()),
+            event_type="dev_mode_bypass",
+            operator_id="system",
+            role=None,
+            action="security_validation_bypass",
+            success=False,
+            details={"warning": "Development mode bypasses security validation - DO NOT USE IN PRODUCTION"}
+        ))
+        print("[WARN] ⚠️  Running in development mode - using default secrets")
+        print("[WARN] ⚠️  This bypass has been logged to audit channel")
 
 # Run validation immediately
 _validate_secrets()
@@ -253,6 +293,17 @@ def init_databases():
                 usage_count INTEGER DEFAULT 0
             )
         """)
+
+        # Security improvement: Add revoked_keys table for API key revocation tracking
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS revoked_keys (
+                key_hash TEXT PRIMARY KEY,
+                revoked_at TEXT NOT NULL,
+                revoked_by TEXT,
+                reason TEXT
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_revoked_key_hash ON revoked_keys(key_hash)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_key_hash ON api_keys(key_hash)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_api_operator ON api_keys(operator_id)")
 
@@ -803,12 +854,34 @@ def validate_api_key(api_key: str) -> Optional[Dict]:
     Validate API key and return operator info.
 
     FIX 6: Uses constant-time comparison to prevent timing attacks.
+    Security improvement: Checks revoked_keys table before validation.
     """
     # Hash the provided key
     key_hash = hashlib.sha256(api_key.encode()).hexdigest()
     now = utc_now()
 
     with get_api_keys_db() as conn:
+        # Security improvement: Check if key is revoked first
+        revoked_check = conn.execute("""
+            SELECT revoked_at, reason FROM revoked_keys WHERE key_hash = ?
+        """, (key_hash,)).fetchone()
+
+        if revoked_check:
+            log_auth_event(AuthEvent(
+                timestamp=to_utc_iso(now),
+                event_type="api_key_revoked_attempt",
+                operator_id="unknown",
+                role=None,
+                action="validate_api_key",
+                success=False,
+                details={
+                    "reason": "Key revoked",
+                    "revoked_at": revoked_check["revoked_at"],
+                    "revocation_reason": revoked_check["reason"]
+                }
+            ))
+            return None
+
         cursor = conn.execute("""
             SELECT * FROM api_keys
             WHERE active = 1 AND (expires_at IS NULL OR expires_at > ?)
@@ -846,12 +919,36 @@ def validate_api_key(api_key: str) -> Optional[Dict]:
 
         return None
 
-def revoke_api_key(key_id: str, operator_id: str):
-    """Revoke an API key."""
+def revoke_api_key(key_id: str, operator_id: str, reason: Optional[str] = None, revoked_by: Optional[str] = None):
+    """
+    Revoke an API key.
+
+    Security improvement: Adds key to revoked_keys table for permanent tracking.
+    """
+    now = utc_now()
+
     with get_api_keys_db() as conn:
+        # Get key hash before revoking
+        cursor = conn.execute("""
+            SELECT key_hash FROM api_keys WHERE key_id = ? AND operator_id = ?
+        """, (key_id, operator_id))
+        row = cursor.fetchone()
+
+        if not row:
+            raise ValueError(f"API key {key_id} not found for operator {operator_id}")
+
+        key_hash = row["key_hash"]
+
+        # Deactivate key
         conn.execute("""
             UPDATE api_keys SET active = 0 WHERE key_id = ? AND operator_id = ?
         """, (key_id, operator_id))
+
+        # Security improvement: Add to revoked_keys table for permanent tracking
+        conn.execute("""
+            INSERT OR REPLACE INTO revoked_keys (key_hash, revoked_at, revoked_by, reason)
+            VALUES (?, ?, ?, ?)
+        """, (key_hash, to_utc_iso(now), revoked_by or operator_id, reason or "Manual revocation"))
 
     log_auth_event(AuthEvent(
         timestamp=to_utc_iso(utc_now()),

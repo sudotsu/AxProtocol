@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Optional, Tuple
 import logging
 
+logger = logging.getLogger("axprotocol.governance.coupling")
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -36,10 +38,20 @@ def load_governance_coupling() -> Tuple[dict, dict]:
         try:
             if p.exists():
                 data = json.loads(p.read_text(encoding="utf8"))
+                logger.info(f"Loaded governance coupling from {p}")
                 break
-        except Exception:
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid JSON in {p}: {e}; trying next candidate")
             continue
+        except IOError as e:
+            logger.warning(f"Failed to read {p}: {e}; trying next candidate")
+            continue
+        except Exception as e:
+            logger.warning(f"Unexpected error reading {p}: {e}; trying next candidate")
+            continue
+
     if data is None:
+        logger.warning("No governance coupling config found; using empty defaults")
         return {}, {}
 
     settings = {"write_governance_to_ledger": bool(data.get("write_governance_to_ledger", False))} if isinstance(data, dict) else {}
@@ -150,7 +162,8 @@ def compute_soft_signals(all_text: str, detected_domain: str, domain_override: O
                 gov_soft.add('DOMAIN_MISROUTING')
             elif confidence is not None and confidence < 0.35:
                 gov_soft.add('DOMAIN_MISROUTING')
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Domain misrouting check failed: {e}")
             pass
     return gov_soft
 
@@ -229,6 +242,7 @@ def initialize_schema() -> dict:
         return None
 
     def _load(path: Path) -> Optional[object]:
+        """Load config file (YAML or JSON) with proper error handling."""
         try:
             if not path or not path.exists():
                 return None
@@ -236,7 +250,14 @@ def initialize_schema() -> dict:
             if path.suffix.lower() in (".yaml", ".yml"):
                 return yaml.safe_load(txt)
             return json.loads(txt)
-        except Exception:
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid JSON in {path}: {e}")
+            return None
+        except IOError as e:
+            logger.warning(f"Failed to read {path}: {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"Unexpected error loading {path}: {e}")
             return None
 
     def _read_examples() -> dict:
@@ -248,7 +269,11 @@ def initialize_schema() -> dict:
             try:
                 lines = [ln.strip() for ln in md.read_text(encoding="utf8").splitlines() if ln.strip()]
                 out[md.stem] = lines[:100]
-            except Exception:
+            except IOError as e:
+                logger.debug(f"Failed to read example {md}: {e}")
+                continue
+            except Exception as e:
+                logger.debug(f"Unexpected error reading {md}: {e}")
                 continue
         return out
 

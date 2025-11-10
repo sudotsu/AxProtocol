@@ -8,6 +8,7 @@ Loads role definitions based on domain and build type with smart domain mapping
 import os
 from pathlib import Path
 from typing import Dict, Optional, List
+from difflib import get_close_matches  # Code quality improvement: Fuzzy matching
 
 
 # ============================================================================
@@ -25,7 +26,7 @@ DOMAIN_MAPPING = {
     "investment": "strategy",
     "banking": "strategy",
     "insurance": "strategy",
-    
+
     # Educational/Academic domains
     "academic": "education",
     "training": "education",
@@ -35,14 +36,14 @@ DOMAIN_MAPPING = {
     "university": "education",
     "school": "education",
     "course": "education",
-    
+
     # Legal/Compliance domains
     "legal": "ops",
     "compliance": "ops",
     "regulatory": "ops",
     "governance": "strategy",
     "policy": "strategy",
-    
+
     # Healthcare/Medical domains
     "healthcare": "research",
     "medical": "research",
@@ -51,7 +52,7 @@ DOMAIN_MAPPING = {
     "pharma": "research",
     "pharmaceutical": "research",
     "biotech": "research",
-    
+
     # Technology domains (variations)
     "tech": "technical",
     "technology": "technical",
@@ -64,7 +65,7 @@ DOMAIN_MAPPING = {
     "cloud": "technical",
     "cybersecurity": "technical",
     "security": "technical",
-    
+
     # HR/People domains
     "hr": "ops",
     "human resources": "ops",
@@ -72,7 +73,7 @@ DOMAIN_MAPPING = {
     "recruitment": "ops",
     "talent": "ops",
     "hiring": "ops",
-    
+
     # Design/Creative domains (variations)
     "design": "creative",
     "art": "creative",
@@ -82,28 +83,28 @@ DOMAIN_MAPPING = {
     "branding": "marketing",
     "advertising": "marketing",
     "copywriting": "creative",
-    
+
     # Operations domains (variations)
     "operations": "ops",
     "logistics": "ops",
     "supply chain": "ops",
     "manufacturing": "ops",
     "quality": "ops",
-    
+
     # Research domains (variations)
     "science": "research",
     "analysis": "research",
     "analytics": "research",
     "data science": "research",
     "statistics": "research",
-    
+
     # Product domains (variations)
     "product management": "product",
     "pm": "product",
     "ux": "product",
     "ui": "creative",
     "user experience": "product",
-    
+
     # Marketing domains (variations)
     "digital marketing": "marketing",
     "growth": "marketing",
@@ -112,7 +113,7 @@ DOMAIN_MAPPING = {
     "pr": "marketing",
     "public relations": "marketing",
     "communications": "marketing",
-    
+
     # Strategic domains
     "consulting": "strategy",
     "advisory": "strategy",
@@ -131,22 +132,22 @@ DEFAULT_FALLBACK_ORDER = ["strategy", "research", "ops"]
 def get_domain_directory(domain: str, verbose: bool = True) -> tuple[Path, str, str]:
     """
     Get the appropriate roles directory for a domain with intelligent mapping.
-    
+
     Args:
         domain: Requested domain name
         verbose: Whether to print mapping information
-    
+
     Returns:
         Tuple of (Path to directory, actual domain used, reason/message)
     """
     base_roles = Path(__file__).parent / "roles"
     domain_lower = domain.lower().strip()
-    
+
     # Try exact match first
     exact_dir = base_roles / domain_lower
     if exact_dir.exists():
         return (exact_dir, domain_lower, "exact_match")
-    
+
     # Try case-insensitive match with actual directories
     if base_roles.exists():
         for existing_dir in base_roles.iterdir():
@@ -154,7 +155,7 @@ def get_domain_directory(domain: str, verbose: bool = True) -> tuple[Path, str, 
                 if verbose:
                     print(f"ℹ️  Found case-insensitive match: '{existing_dir.name}'")
                 return (existing_dir, existing_dir.name, "case_match")
-    
+
     # Try direct mapping from configuration
     if domain_lower in DOMAIN_MAPPING:
         mapped_domain = DOMAIN_MAPPING[domain_lower]
@@ -163,7 +164,7 @@ def get_domain_directory(domain: str, verbose: bool = True) -> tuple[Path, str, 
             if verbose:
                 print(f"ℹ️  Domain '{domain}' → '{mapped_domain}' (direct mapping)")
             return (mapped_dir, mapped_domain, f"mapped_from_{domain}")
-    
+
     # Try partial keyword matching (e.g., "financial planning" contains "financial")
     for keyword, target_domain in DOMAIN_MAPPING.items():
         # Check if keyword is in domain or domain is in keyword
@@ -173,16 +174,28 @@ def get_domain_directory(domain: str, verbose: bool = True) -> tuple[Path, str, 
                 if verbose:
                     print(f"ℹ️  Domain '{domain}' matched keyword '{keyword}' → '{target_domain}'")
                 return (target_dir, target_domain, f"keyword_match_{keyword}")
-    
+
+    # Code quality improvement: Fuzzy matching for user-input domains
+    if base_roles.exists():
+        available_domains = [d.name for d in base_roles.iterdir() if d.is_dir() and not d.name.startswith('.')]
+        fuzzy_matches = get_close_matches(domain_lower, available_domains, n=1, cutoff=0.6)
+        if fuzzy_matches:
+            fuzzy_domain = fuzzy_matches[0]
+            fuzzy_dir = base_roles / fuzzy_domain
+            if fuzzy_dir.exists():
+                if verbose:
+                    print(f"ℹ️  Domain '{domain}' → '{fuzzy_domain}' (fuzzy match, similarity ≥60%)")
+                return (fuzzy_dir, fuzzy_domain, f"fuzzy_match_from_{domain_lower}")
+
     # Final fallback to strategy (most versatile)
     fallback_domain = "strategy"
     fallback_dir = base_roles / fallback_domain
-    
+
     if fallback_dir.exists():
         if verbose:
             print(f"⚠️  Domain '{domain}' not recognized → using '{fallback_domain}' (general purpose)")
         return (fallback_dir, fallback_domain, "fallback_strategy")
-    
+
     # Last resort: use first available domain
     if base_roles.exists():
         for existing_dir in base_roles.iterdir():
@@ -190,7 +203,7 @@ def get_domain_directory(domain: str, verbose: bool = True) -> tuple[Path, str, 
                 if verbose:
                     print(f"⚠️  Using available domain: '{existing_dir.name}'")
                 return (existing_dir, existing_dir.name, "last_resort")
-    
+
     # Absolute last resort: return non-existent marketing path
     marketing_dir = base_roles / "marketing"
     if verbose:
@@ -201,61 +214,61 @@ def get_domain_directory(domain: str, verbose: bool = True) -> tuple[Path, str, 
 def get_fallback_domains_for(domain: str) -> List[str]:
     """
     Get ordered list of fallback domains for a given domain.
-    
+
     Args:
         domain: Domain name
-    
+
     Returns:
         List of domain names to try in order
     """
     domain_lower = domain.lower().strip()
-    
+
     # Custom fallback priorities for specific domain types
     domain_priorities = {
         # Financial domains should try strategy first
         "finance": ["strategy", "ops", "research"],
         "financial": ["strategy", "ops", "research"],
         "accounting": ["ops", "strategy", "research"],
-        
+
         # Educational domains
         "education": ["education", "research", "strategy"],
         "academic": ["education", "research", "strategy"],
         "training": ["education", "ops", "strategy"],
-        
+
         # Healthcare domains
         "healthcare": ["research", "education", "ops"],
         "medical": ["research", "education", "strategy"],
         "clinical": ["research", "ops", "education"],
-        
+
         # Legal domains
         "legal": ["ops", "strategy", "research"],
         "compliance": ["ops", "strategy", "research"],
-        
+
         # Sales/Marketing domains
         "sales": ["marketing", "strategy", "ops"],
         "marketing": ["marketing", "creative", "strategy"],
-        
+
         # Technical domains
         "tech": ["technical", "product", "research"],
         "technical": ["technical", "product", "research"],
         "engineering": ["technical", "product", "ops"],
-        
+
         # Creative domains
         "creative": ["creative", "marketing", "product"],
         "design": ["creative", "product", "marketing"],
         "content": ["creative", "marketing", "education"],
     }
-    
+
     # Try to find specific priorities
     for keyword, priorities in domain_priorities.items():
         if keyword in domain_lower or domain_lower in keyword:
             return priorities
-    
+
     # Check if domain maps to something
     if domain_lower in DOMAIN_MAPPING:
         mapped = DOMAIN_MAPPING[domain_lower]
         return [mapped] + DEFAULT_FALLBACK_ORDER
-    
+
     # Default fallback order
     return DEFAULT_FALLBACK_ORDER
 
@@ -426,18 +439,18 @@ def get_available_domains() -> list:
 def get_all_mapped_domains() -> Dict[str, str]:
     """
     Get all domain mappings (both existing and mapped).
-    
+
     Returns:
         Dictionary of {domain_name: target_directory}
     """
     available = get_available_domains()
     result = {domain: domain for domain in available}
-    
+
     # Add all mappings
     for source, target in DOMAIN_MAPPING.items():
         if target in available:
             result[source] = target
-    
+
     return result
 
 
@@ -480,37 +493,37 @@ if __name__ == "__main__":
     print("=" * 70)
     print("Testing AxProtocol Role Loader with Intelligent Domain Mapping")
     print("=" * 70)
-    
+
     print("\n📁 Available domain directories:", get_available_domains())
-    
+
     print("\n🗺️  Sample domain mappings:")
     test_domains = ["finance", "healthcare", "legal", "tech", "design", "education", "unknown_domain"]
     for test_domain in test_domains:
         _, actual, reason = get_domain_directory(test_domain, verbose=False)
         print(f"  '{test_domain}' → '{actual}' ({reason})")
-    
+
     print("\n" + "=" * 70)
     print("Testing role loading...")
     print("=" * 70)
-    
+
     # Test loading marketing roles
     print("\n✅ Loading marketing roles:")
     roles = load_roles_by_pattern("stable", "marketing")
     for role_name, role_data in roles.items():
         print(f"  ✓ {role_name}: {len(role_data['content'])} chars (domain: {role_data['domain']})")
-    
+
     # Test loading with domain mapping
     print("\n✅ Loading finance roles (should map to strategy):")
     roles = load_roles_by_pattern("stable", "finance")
     for role_name, role_data in roles.items():
         print(f"  ✓ {role_name}: domain={role_data['domain']}, reason={role_data['mapping_reason']}")
-    
+
     # Test loading unknown domain
     print("\n✅ Loading completely unknown domain:")
     roles = load_roles_by_pattern("stable", "quantum_physics")
     for role_name, role_data in roles.items():
         print(f"  ✓ {role_name}: domain={role_data['domain']}, reason={role_data['mapping_reason']}")
-    
+
     # Test validation
     print("\n" + "=" * 70)
     print("Validating all available domains...")
@@ -519,7 +532,7 @@ if __name__ == "__main__":
         valid = validate_roles(domain, "stable")
         status = "✅" if valid else "⚠️"
         print(f"  {status} {domain}")
-    
+
     print("\n" + "=" * 70)
     print("All mapped domains:")
     print("=" * 70)

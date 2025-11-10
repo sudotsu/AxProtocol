@@ -12,6 +12,6 @@
     "banned": ["deployment checklist", "architecture rationale", "api", "ddl", "audit"]
   },
   "Critic": {
-    "banned": ["deployment checklist", "schedule", "copy block"]
+    "banned": ["deployment checklist", "schedule", "copy block", "testimonials", "calls to action"]
   }
 }
