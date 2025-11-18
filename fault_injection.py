@@ -22,10 +22,7 @@ from datetime import datetime
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-try:
-    from run_axp import run_chain
-    from taes_evaluation import evaluate_taes
-    from score_validator import validate_scores
+tvalidator import validate_scores
     from ledger import get_last_n_entries
     MODULES_AVAILABLE = True
 except ImportError as e:
