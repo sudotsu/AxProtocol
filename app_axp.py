@@ -16,7 +16,7 @@ Changes from v2.4:
 - Maintains all v2.4 features (domain detection, TAES, history, etc.)
 """
 
-import streamlit as st
+import streamlit as st  # type: ignore
 from pathlib import Path
 import logging, sys, traceback
 from datetime import datetime, timedelta

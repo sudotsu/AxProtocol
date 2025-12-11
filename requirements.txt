@@ -11,3 +11,5 @@ requests>=2.31.0  # for future Bridge sync automation
 pymilvus>=2.6.0  # for vector database operations
 grpcio>=1.66.0  # pymilvus dependency
 ujson>=2.0.0  # pymilvus dependency
+fastapi>=0.104.0  # for Sentinel API
+uvicorn[standard]>=0.24.0  # for Sentinel API server
