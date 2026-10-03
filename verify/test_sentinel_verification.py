@@ -25,11 +25,17 @@ class _Signer:
 
     def sign_hex(self, payload: bytes) -> str:
         if sentinel_verifier._HAVE_NACL:
-            return self._key.sign(payload).hex()
+            return self._key.sign(payload).signature.hex()
         return hmac.new(self._key, payload, hashlib.sha256).hexdigest()
 
+    def sign_legacy_hex(self, payload: bytes) -> str:
+        """Reproduce the historical PyNaCl SignedMessage-on-disk format."""
+        if sentinel_verifier._HAVE_NACL:
+            return self._key.sign(payload).hex()
+        return self.sign_hex(payload)
 
-def _record(signer: _Signer, data: dict) -> dict:
+
+def _record(signer: _Signer, data: dict, *, legacy_signature: bool = False) -> dict:
     entry = {
         "timestamp": "2026-01-01T00:00:00+00:00",
         "role": "TEST",
@@ -38,7 +44,12 @@ def _record(signer: _Signer, data: dict) -> dict:
         "data": data,
     }
     payload = json.dumps(entry, sort_keys=True).encode()
-    return {"entry": entry, "sig": signer.sign_hex(payload)}
+    signature = (
+        signer.sign_legacy_hex(payload)
+        if legacy_signature
+        else signer.sign_hex(payload)
+    )
+    return {"entry": entry, "sig": signature}
 
 
 def _ledger_with_key(tmp_path, monkeypatch):
@@ -90,6 +101,44 @@ def test_sentinel_accepts_valid_signed_entry(tmp_path, monkeypatch):
     assert report["details"] == []
     assert report["signature_verification_available"] is True
     assert report["signed_jsonl"]["verified"] is True
+
+
+def test_sentinel_discovers_public_key_inside_ledger_dir(tmp_path, monkeypatch):
+    ledger_dir, signer = _ledger_with_key(tmp_path, monkeypatch)
+    monkeypatch.setattr(sentinel_verifier, "PUB_KEY_FILE", None)
+    record = _record(signer, {"value": 1, "key": "auto-discovered"})
+    (ledger_dir / "20260101.jsonl").write_text(json.dumps(record) + "\n", encoding="utf8")
+
+    report = sentinel_verifier.verify_all(str(ledger_dir))
+
+    assert report["verified"] is True
+    assert report["signature_verification_available"] is True
+
+
+def test_sentinel_accepts_legacy_signed_message_record(tmp_path, monkeypatch):
+    ledger_dir, signer = _ledger_with_key(tmp_path, monkeypatch)
+    record = _record(signer, {"value": 1, "format": "legacy"}, legacy_signature=True)
+    (ledger_dir / "20260101.jsonl").write_text(json.dumps(record) + "\n", encoding="utf8")
+
+    report = sentinel_verifier.verify_all(str(ledger_dir))
+
+    assert report["verified"] is True
+    assert report["details"] == []
+
+
+def test_sentinel_rejects_invalid_signature_length(tmp_path, monkeypatch):
+    ledger_dir, signer = _ledger_with_key(tmp_path, monkeypatch)
+    record = _record(signer, {"value": 1})
+    if sentinel_verifier._HAVE_NACL:
+        record["sig"] = "00" * 63
+    else:
+        record["sig"] = "not-a-valid-hmac"
+    (ledger_dir / "20260101.jsonl").write_text(json.dumps(record) + "\n", encoding="utf8")
+
+    report = sentinel_verifier.verify_all(str(ledger_dir))
+
+    assert report["verified"] is False
+    assert any(d.get("error") == "sig_invalid" for d in report["details"])
 
 
 def test_sentinel_detects_modified_signed_data(tmp_path, monkeypatch):
