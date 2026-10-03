@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "axprotocol"
 version = "2.4.0"
-description = "Self-auditing, directive-aware AI reasoning kernel with multi-role agents and TAES evaluation"
+description = "Directive-aware multi-role AI reasoning kernel with detached Sentinel ledger verification"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "AxProtocol Team"}
 ]
-keywords = ["ai", "reasoning", "governance", "multi-agent", "taes", "directives"]
+keywords = ["ai", "reasoning", "governance", "multi-agent", "audit", "sentinel", "taes", "directives"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -34,8 +34,8 @@ dependencies = [
     "PyJWT>=2.8.0",
     "rich>=13.0.0",
     "requests>=2.31.0",
-    "pynacl>=1.5.0",  # For Ed25519 signing
-    "cryptography>=41.0.0",  # For HMAC fallback and general crypto
+    "pynacl>=1.5.0",
+    "cryptography>=41.0.0",
 ]
 
 [project.optional-dependencies]
@@ -62,13 +62,20 @@ vector = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/axprotocol"
-Documentation = "https://github.com/yourusername/axprotocol#readme"
-Repository = "https://github.com/yourusername/axprotocol"
-Issues = "https://github.com/yourusername/axprotocol/issues"
+Homepage = "https://github.com/sudotsu/AxP"
+Documentation = "https://github.com/sudotsu/AxP#readme"
+Repository = "https://github.com/sudotsu/AxP"
+Issues = "https://github.com/sudotsu/AxP/issues"
+
+# AxP uses a namespace-style top-level `axp/` directory with implementation
+# subpackages. Explicitly listing only `axp` produced a wheel containing almost
+# none of the implementation. Discover the complete package tree instead.
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["axprotocol*", "axp*"]
+namespaces = true
 
 [tool.setuptools]
-packages = ["axprotocol", "axp"]
 include-package-data = true
 
 [tool.pytest.ini_options]
@@ -76,4 +83,3 @@ testpaths = ["verify"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-
