@@ -1,20 +1,26 @@
 """
-Ledger Verification Utilities
------------------------------
-Shared verification logic for the detached Sentinel auditor.
+Detached Sentinel verification utilities.
 
-Sentinel is intentionally able to verify ledger artifacts without importing the
-AxProtocol LLM/orchestration stack. The ledger writer stores `entry["hash"]` as
-the SHA-256 digest of `entry["data"]`; Sentinel must validate that exact contract
-before checking the signature over the complete entry object.
+AxProtocol currently emits two audit streams into the ledger directory:
+
+1. `*.jsonl` signed records from `axp.governance.ledger` (used by TAES and
+   verification paths). Each record contains a SHA-256 hash of `entry.data` and
+   a signature over the complete entry.
+2. `audit_ledger.db`, the SQLite hash-chain used by the main role-execution
+   chain through the historical top-level `ledger.py` module.
+
+Sentinel verifies both formats without importing or executing the LLM runtime.
 """
 
-import json
+from __future__ import annotations
+
 import hashlib
-import os
+import json
 import logging
+import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+import sqlite3
+from typing import Any, Dict, List, Optional
 
 try:
     from nacl.signing import VerifyKey
@@ -28,17 +34,17 @@ logger = logging.getLogger("axprotocol.sentinel")
 
 PUB_KEY_ENV = "AXP_PUBLIC_KEY"
 PUB_KEY_FILE = os.environ.get(PUB_KEY_ENV, "/audit/ledger/public.key")
+SQLITE_LEDGER_NAME = "audit_ledger.db"
 
 
 def _verify_sig(entry: Dict[str, Any], sig_hex: str, pubkey: bytes) -> bool:
-    """Verify the signature over the canonical JSON representation of an entry."""
+    """Verify the signature over canonical JSON for a signed JSONL entry."""
     if not _HAVE_NACL:
-        # HMAC fallback verification. In fallback mode the mirrored "public" key
-        # is necessarily the shared secret; see docs/SENTINEL.md for limitations.
+        # Compatibility fallback. This is symmetric authentication, not a true
+        # detached public-key trust boundary; see docs/SENTINEL.md.
         try:
-            secret = pubkey
             msg = json.dumps(entry, sort_keys=True).encode()
-            expected = hmac.new(secret, msg, hashlib.sha256).hexdigest()
+            expected = hmac.new(pubkey, msg, hashlib.sha256).hexdigest()
             return hmac.compare_digest(expected, sig_hex)
         except Exception:
             return False
@@ -54,34 +60,18 @@ def _verify_sig(entry: Dict[str, Any], sig_hex: str, pubkey: bytes) -> bool:
         return False
 
 
-def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
-    """Verify every JSONL ledger record in *ledger_dir*.
-
-    Checks performed per non-empty record:
-    1. JSON structure can be parsed.
-    2. `entry.data` is an object and its canonical SHA-256 equals `entry.hash`.
-    3. If a verification key is available, the signature over the full entry is valid.
-
-    The function is read-only with respect to the ledger.
-    """
-    ledger_path = Path(ledger_dir)
-    if not ledger_path.exists():
-        logger.warning(f"Ledger directory does not exist: {ledger_dir}")
-        return {
-            "verified": False,
-            "details": [{"error": "ledger_dir_not_found", "path": ledger_dir}],
-            "files_checked": 0,
-            "entries_checked": 0,
-        }
-
+def _verify_jsonl(ledger_path: Path) -> Dict[str, Any]:
+    """Verify signed JSONL ledger files in *ledger_path*."""
     files = sorted(ledger_path.glob("*.jsonl"))
     if not files:
-        logger.warning(f"No ledger files found in {ledger_dir}")
         return {
-            "verified": False,
-            "details": [{"error": "no_ledger_files"}],
+            "present": False,
+            "verified": None,
+            "details": [],
             "files_checked": 0,
             "entries_checked": 0,
+            "signature_mode": "ed25519" if _HAVE_NACL else "hmac-fallback",
+            "signature_verification_available": False,
         }
 
     details: List[Dict[str, Any]] = []
@@ -94,18 +84,17 @@ def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
         try:
             pubkey = pubkey_path.read_bytes()
         except IOError as e:
-            logger.error(f"Failed to read public key: {e}")
-            return {
-                "verified": False,
-                "details": [{"error": "pubkey_read_failed", "reason": str(e)}],
-                "files_checked": len(files),
-                "entries_checked": 0,
-            }
+            verified = False
+            details.append({
+                "source": "signed_jsonl",
+                "error": "pubkey_read_failed",
+                "reason": str(e),
+            })
     else:
-        # Hash verification remains useful without a key, but the report must not
-        # imply cryptographic authenticity was established.
+        # Hash verification can still run, but authenticity is not established.
         verified = False
         details.append({
+            "source": "signed_jsonl",
             "error": "pubkey_not_found",
             "path": str(pubkey_path),
             "note": "content hashes can be checked, signatures cannot",
@@ -124,6 +113,7 @@ def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
                     except json.JSONDecodeError as e:
                         verified = False
                         details.append({
+                            "source": "signed_jsonl",
                             "file": str(file_path),
                             "line": line_num,
                             "error": "invalid_json",
@@ -136,6 +126,7 @@ def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
                     if not isinstance(entry, dict) or not entry:
                         verified = False
                         details.append({
+                            "source": "signed_jsonl",
                             "file": str(file_path),
                             "line": line_num,
                             "error": "missing_entry",
@@ -152,6 +143,7 @@ def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
                         if expected_hash != entry.get("hash"):
                             verified = False
                             details.append({
+                                "source": "signed_jsonl",
                                 "file": str(file_path),
                                 "line": line_num,
                                 "error": "hash_mismatch",
@@ -161,6 +153,7 @@ def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
                     except Exception as e:
                         verified = False
                         details.append({
+                            "source": "signed_jsonl",
                             "file": str(file_path),
                             "line": line_num,
                             "error": "hash_computation_failed",
@@ -170,6 +163,7 @@ def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
                     if not sig:
                         verified = False
                         details.append({
+                            "source": "signed_jsonl",
                             "file": str(file_path),
                             "line": line_num,
                             "error": "missing_signature",
@@ -177,6 +171,7 @@ def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
                     elif pubkey and not _verify_sig(entry, sig, pubkey):
                         verified = False
                         details.append({
+                            "source": "signed_jsonl",
                             "file": str(file_path),
                             "line": line_num,
                             "error": "sig_invalid",
@@ -184,16 +179,148 @@ def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
         except IOError as e:
             verified = False
             details.append({
+                "source": "signed_jsonl",
                 "file": str(file_path),
                 "error": "file_read_failed",
                 "reason": str(e),
             })
 
     return {
+        "present": True,
         "verified": verified,
         "details": details,
         "files_checked": len(files),
         "entries_checked": entries_checked,
         "signature_mode": "ed25519" if _HAVE_NACL else "hmac-fallback",
         "signature_verification_available": pubkey is not None,
+    }
+
+
+def verify_sqlite_chain(db_path: Path) -> Dict[str, Any]:
+    """Verify the historical/main SQLite execution hash chain read-only.
+
+    The writer in top-level `ledger.py` computes:
+
+        current_hash = SHA256(
+            timestamp|agent_id|action|output_hash|previous_hash
+        )[:16]
+
+    Sentinel independently checks both the stored `previous_hash` link and the
+    recomputed `current_hash` for every row in ID order.
+    """
+    if not db_path.exists():
+        return {
+            "present": False,
+            "verified": None,
+            "details": [],
+            "entries_checked": 0,
+        }
+
+    details: List[Dict[str, Any]] = []
+    rows = []
+    try:
+        uri = f"file:{db_path.resolve()}?mode=ro"
+        with sqlite3.connect(uri, uri=True) as conn:
+            rows = conn.execute(
+                "SELECT id, timestamp, agent_id, action, output_hash, "
+                "previous_hash, current_hash FROM audit_log ORDER BY id"
+            ).fetchall()
+    except sqlite3.DatabaseError as e:
+        return {
+            "present": True,
+            "verified": False,
+            "details": [{
+                "source": "sqlite_hash_chain",
+                "file": str(db_path),
+                "error": "sqlite_read_failed",
+                "reason": str(e),
+            }],
+            "entries_checked": 0,
+        }
+
+    for index, row in enumerate(rows):
+        (
+            entry_id,
+            timestamp,
+            agent_id,
+            action,
+            output_hash,
+            previous_hash,
+            current_hash,
+        ) = row
+
+        expected_prev = "genesis" if index == 0 else rows[index - 1][6]
+        if previous_hash != expected_prev:
+            details.append({
+                "source": "sqlite_hash_chain",
+                "file": str(db_path),
+                "entry_id": entry_id,
+                "error": "previous_hash_mismatch",
+                "expected": expected_prev,
+                "actual": previous_hash,
+            })
+
+        hash_input = f"{timestamp}|{agent_id}|{action}|{output_hash}|{expected_prev}"
+        expected_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
+        if current_hash != expected_hash:
+            details.append({
+                "source": "sqlite_hash_chain",
+                "file": str(db_path),
+                "entry_id": entry_id,
+                "error": "current_hash_mismatch",
+                "expected": expected_hash,
+                "actual": current_hash,
+            })
+
+    return {
+        "present": True,
+        "verified": len(details) == 0,
+        "details": details,
+        "entries_checked": len(rows),
+    }
+
+
+def verify_all(ledger_dir: str = "/audit/ledger") -> Dict[str, Any]:
+    """Verify every supported audit artifact in *ledger_dir*.
+
+    The overall result is true only when at least one supported ledger artifact
+    exists and every present artifact verifies successfully.
+    """
+    ledger_path = Path(ledger_dir)
+    if not ledger_path.exists():
+        return {
+            "verified": False,
+            "details": [{"error": "ledger_dir_not_found", "path": ledger_dir}],
+            "files_checked": 0,
+            "entries_checked": 0,
+            "signed_jsonl": {"present": False, "verified": None},
+            "sqlite_hash_chain": {"present": False, "verified": None},
+        }
+
+    signed = _verify_jsonl(ledger_path)
+    sqlite_report = verify_sqlite_chain(ledger_path / SQLITE_LEDGER_NAME)
+
+    present_reports = [r for r in (signed, sqlite_report) if r.get("present")]
+    if not present_reports:
+        return {
+            "verified": False,
+            "details": [{"error": "no_supported_ledger_artifacts"}],
+            "files_checked": 0,
+            "entries_checked": 0,
+            "signed_jsonl": signed,
+            "sqlite_hash_chain": sqlite_report,
+        }
+
+    details = list(signed.get("details", [])) + list(sqlite_report.get("details", []))
+    verified = all(r.get("verified") is True for r in present_reports)
+
+    return {
+        "verified": verified,
+        "details": details,
+        "files_checked": signed.get("files_checked", 0) + (1 if sqlite_report.get("present") else 0),
+        "entries_checked": signed.get("entries_checked", 0) + sqlite_report.get("entries_checked", 0),
+        "signature_mode": signed.get("signature_mode"),
+        "signature_verification_available": signed.get("signature_verification_available", False),
+        "signed_jsonl": signed,
+        "sqlite_hash_chain": sqlite_report,
     }
