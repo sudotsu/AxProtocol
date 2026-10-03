@@ -42,11 +42,28 @@ if _HAVE_NACL:
         _PUBLIC_PATH.write_bytes(_SIGNING_KEY.verify_key.encode())
 
         def _sign(payload: bytes) -> str:
-            return _SIGNING_KEY.sign(payload).hex()
+            """Return a detached 64-byte Ed25519 signature encoded as hex."""
+            return _SIGNING_KEY.sign(payload).signature.hex()
 
         def _verify(payload: bytes, sig_hex: str) -> None:
+            """Verify current detached signatures and legacy signed-message blobs."""
             verify_key = VerifyKey(_PUBLIC_PATH.read_bytes())
-            verify_key.verify(payload, bytes.fromhex(sig_hex))
+            signature = bytes.fromhex(sig_hex)
+            if len(signature) == 64:
+                verify_key.verify(payload, signature)
+                return
+
+            # Historical AxProtocol records accidentally stored
+            # SigningKey.sign(payload).hex(), which is signature || payload.
+            if len(signature) == 64 + len(payload):
+                recovered = verify_key.verify(signature)
+                if recovered != payload:
+                    raise ValueError("Legacy signed message payload mismatch")
+                return
+
+            raise ValueError(
+                f"Invalid Ed25519 signature length: expected 64 bytes, got {len(signature)}"
+            )
     except Exception as e:
         logger.error(f"Failed to initialize Ed25519 signing: {e}")
         raise RuntimeError("Cannot initialize ledger signing key") from e
