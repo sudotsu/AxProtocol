@@ -1,30 +1,27 @@
-"""
-AxProtocol - Self-auditing, directive-aware AI reasoning kernel
+"""AxProtocol public Python API.
 
-AxProtocol is a multi-role reasoning system with:
-- Strategist → Analyst → Producer → Courier → Critic chain
-- TAES (Truth/Alignment/Efficiency/Signal) evaluation
-- Directive-based governance enforcement
-- Immutable audit ledger
-- Domain-specific role configurations
-
-Public API:
-    from axprotocol import run_chain
+The package surface stays importable without requiring model credentials. The
+heavy orchestration stack is imported only when `run_chain()` is actually
+called; deterministic utilities, validators, detection helpers, and Sentinel
+can therefore be used independently.
 """
 
 __version__ = "2.4.0"
 
-# Re-export main public API from internal axp package
-from axp.orchestration import run_chain
 
-# Re-export commonly used utilities
+def run_chain(*args, **kwargs):
+    """Run the AxProtocol role chain, importing the model runtime lazily."""
+    from axp.orchestration import run_chain as _run_chain
+
+    return _run_chain(*args, **kwargs)
+
+
+# Offline/deterministic utilities are safe to expose eagerly.
 from axp.utils.config_fingerprint import compute_config_hash
 from axp.utils.session_logging import log_session
 
-# Re-export validators for external use
 from axp.validation import validate_S, validate_A, validate_P, validate_C, validate_X
 
-# Re-export detection functions
 from axp.detection import (
     detect_sycophancy,
     detect_contradiction,
@@ -36,18 +33,14 @@ from axp.detection import (
 )
 
 __all__ = [
-    # Main API
     "run_chain",
-    # Utilities
     "compute_config_hash",
     "log_session",
-    # Validators
     "validate_S",
     "validate_A",
     "validate_P",
     "validate_C",
     "validate_X",
-    # Detection
     "detect_sycophancy",
     "detect_contradiction",
     "detect_ambiguity_in_objective",
@@ -55,7 +48,5 @@ __all__ = [
     "detect_wants_praise",
     "precedence_inversion",
     "overconfidence_no_evidence",
-    # Version
     "__version__",
 ]
-

@@ -1,596 +1,407 @@
-# AxProtocol v2.7 — Config‑Driven, Sentinel‑Audited Reasoning OS
+# AxProtocol + Sentinel
 
-AxProtocol is a **self-auditing, directive-aware AI reasoning kernel**.
-Every chain runs multi-role agents (Strategist → Analyst → Producer → Courier → Critic), is scored by TAES (Truth / Alignment / Efficiency / Signal) and is governed by hard and soft "directive" signals. All output is logged to an **append-only, cryptographically signed ledger** with config drift detection and independently verified by a detached **Sentinel** auditor.
+AxProtocol is an early AI reasoning/governance project built around explicit role separation, configurable directives, TAES evaluation, audit trails, and fault-injection tests.
+
+**Sentinel is the other half of the project:** a detached verification system intended to inspect the evidence AxProtocol leaves behind without simply trusting the producer's own claim that everything is intact.
+
+This was the creator's first substantial AI project, started roughly **four months after beginning to use AI tools**. The repository is intentionally preserved as both working software and a record of how the architecture evolved.
+
+> **Current framing:** AxProtocol produces work and audit evidence. Sentinel independently verifies the integrity of that evidence.
+
+## Why this repository exists
+
+The original project asked a practical question:
+
+**Can an AI workflow be made more explicit, inspectable, and accountable by separating reasoning responsibilities, encoding governance rules, scoring behavior, and recording what happened?**
+
+That produced AxProtocol: a multi-role chain with domain-specific instructions, TAES evaluation, directive enforcement, config fingerprints, audit ledgers, and adversarial tests.
+
+Sentinel emerged from a second question that may be more generalizable:
+
+**Should the system that produced an AI result also be the only system allowed to tell you whether the evidence around that result is trustworthy?**
+
+Sentinel's answer is no. The verifier is deliberately mechanical: read evidence, recompute hashes, verify links/signatures, and report what fails.
+
+## The architecture: producer + auditor
+
+```text
+                     PRODUCER TRUST DOMAIN
+
+ Objective
+    |
+    v
+ AxProtocol
+ Strategist -> Analyst -> Producer -> Courier -> Critic
+    |
+    +--> domain/directive governance
+    +--> TAES evaluation
+    +--> config fingerprinting
+    +--> execution audit records
+    |
+    +----------------------------+
+                                 |
+                                 v
+                     AUDIT EVIDENCE
+
+              SQLite execution hash chain
+                         +
+                  signed JSONL records
+                         |
+                         | read-only / exported evidence
+                         v
+
+                     AUDITOR TRUST DOMAIN
+
+                    Sentinel
+              +--------------------+
+              | parse records      |
+              | verify chain links |
+              | recompute hashes   |
+              | verify signatures  |
+              | emit reports       |
+              +--------------------+
+```
+
+The intended trust boundary matters more than the names: **the auditor should not need write access to the evidence it audits or the private authority used to create that evidence.**
+
+For the detailed Sentinel threat model, current guarantees, weaknesses, and potential, read **[`docs/SENTINEL.md`](docs/SENTINEL.md)**.
 
 ---
 
-## 🚀 Quick Start
+# Sentinel
 
-### Install from PyPI
+Sentinel deserves separate treatment because it is not simply the last role in the AxProtocol chain.
 
-```bash
-# Basic installation
-pip install axprotocol
+It is a detached audit component with a different job, different failure modes, and potentially broader uses than the original reasoning architecture.
 
-# With FastAPI API support
-pip install axprotocol[api]
+## What Sentinel verifies today
 
-# With Streamlit UI support
-pip install axprotocol[ui]
+The repository currently has **two audit-ledger formats**, both of which Sentinel now understands.
 
-# With all optional dependencies
-pip install axprotocol[api,ui,vector]
+### 1. Main execution ledger: SQLite hash chain
+
+The role-execution path records events in:
+
+```text
+logs/ledger/audit_ledger.db
 ```
 
-### Install from Source
+Each row carries a `previous_hash` and `current_hash`. Sentinel opens the database read-only and verifies both the stored link to the preceding row and the recomputed current hash.
 
-```bash
-git clone https://github.com/yourusername/axprotocol.git
-cd AxProtocol
-pip install -r requirements.txt
+This captures execution-order integrity for the main role chain.
 
-# Or install in development mode
-pip install -e ".[dev]"
+### 2. Signed TAES ledger: JSONL
+
+TAES/governance paths also produce dated JSONL records under `logs/ledger/`.
+
+Those records use this contract:
+
+```text
+entry.hash = SHA256(canonical_json(entry.data))
+entry.sig  = Sign(canonical_json(entry))
 ```
 
-### Run Your First Chain
+With PyNaCl installed, signatures use Ed25519. A compatibility HMAC fallback exists, but it is **not** equivalent to asymmetric detached verification because the verifier must possess the shared secret.
 
-**Python Library:**
-```python
-from axprotocol import run_chain
+Sentinel validates record structure, the stored data hash, signatures, malformed input, and whether signature verification was actually available.
 
-strategist, analyst, producer, courier, critic, results = run_chain(
-    objective="Book 5 local jobs in 7 days for a tree service",
-    domain="marketing"
-)
+## Why Sentinel is interesting
 
-print(f"Strategist: {strategist[:100]}...")
-print(f"TAES IV: {results['strategist']['taes']['integrity_vector']}")
-```
+Its strongest properties are not AI-specific:
 
-**FastAPI API:**
-```bash
-# Install with API support
-pip install axprotocol[api]
+- deterministic verification does not require another model call;
+- auditing can happen later, elsewhere, or repeatedly;
+- the verifier can run with read-only access to producer evidence;
+- signed records provide tamper evidence without sharing the private signing key;
+- a chain can reveal broken execution-history links;
+- the same model can extend to agent actions, CI artifacts, policy decisions, tool calls, or deployment attestations.
 
-# Run API server
-uvicorn sentinel_api:app --host 0.0.0.0 --port 8000
+## What Sentinel does **not** prove
 
-# Make request
-curl -X POST "http://localhost:8000/run" \
-  -H "Content-Type: application/json" \
-  -d '{"objective": "Book 5 local jobs", "domain": "marketing"}'
-```
+Sentinel should not be oversold.
 
-**Streamlit UI:**
-```bash
-streamlit run app_axp.py
-```
+A valid hash chain or signature does **not** prove that an AI answer was true, safe, unbiased, complete, or intelligent. It proves narrower properties about the recorded evidence.
+
+Important current limitations include:
+
+- the SQLite execution chain is hash-linked but not independently signed;
+- the JSONL records are signed but are not themselves sequence-linked;
+- private signing-key custody still lives on the producer side;
+- HMAC fallback is symmetric rather than a real public-key trust boundary;
+- normal files/SQLite are mutable storage, not WORM storage;
+- the two ledger formats are not yet one unified provenance graph;
+- config fingerprints are recorded but historical config snapshots are not independently reconstructed by Sentinel;
+- there is no external timestamp/notarization or transparency-log checkpoint today;
+- cryptographic integrity is different from semantic truth.
+
+Those weaknesses are documented in detail rather than hidden. See [`docs/SENTINEL.md`](docs/SENTINEL.md).
+
+## Where Sentinel could go
+
+The most valuable next directions are likely:
+
+- one unified signed audit envelope for executions, TAES events, tools, approvals, and config state;
+- full SHA-256 hashes plus previous-event linkage and monotonic sequence coordinates;
+- KMS/HSM/TPM-backed key custody;
+- Merkle roots / transparency-log checkpoints;
+- immutable or externally controlled storage replication;
+- policy/config snapshot attestation;
+- agent and tool provenance;
+- independent verification of AI-generated CI/build artifacts;
+- optional semantic-audit plugins layered **on top of**, not confused with, deterministic cryptographic verification.
+
+The long-term architectural idea is simple:
+
+**The producer should not be the only party allowed to attest to the integrity of its own evidence.**
 
 ---
 
-## 📋 Table of Contents
+# AxProtocol
 
-1. [Features](#features)
-2. [Architecture](#architecture)
-3. [Installation](#installation)
-4. [Usage](#usage)
-5. [Domains](#domains)
-6. [Configuration](#configuration)
-7. [Testing](#testing)
-8. [Deployment](#deployment)
-9. [Repository Structure](#repository-structure)
-10. [Contributing](#contributing)
+AxProtocol is the producer/reasoning side of the project.
 
----
+## Multi-role chain
 
-## ✨ Features
+The central execution model separates work across five roles:
 
-### Core Capabilities
-
-- **Multi-Role Reasoning Chain**: Strategist → Analyst → Producer → Courier → Critic
-- **TAES Evaluation**: Truth/Alignment/Efficiency/Signal scoring with domain-specific weights
-- **Directive-Based Governance**: 29 directives (D0-D28) enforcing truth, logic, and compliance
-- **Immutable Audit Ledger**: Cryptographically signed (Ed25519) append-only ledger
-- **Config Drift Detection**: SHA256 hash of all config files stored in every ledger entry
-- **Sentinel Auditor**: Independent verification of ledger integrity and tampering detection
-- **Domain-Specific Roles**: 9 domains (marketing, technical, ops, creative, education, product, strategy, research, finance)
-- **Fault Injection Testing**: Δ1-Δ4 test suites for adversarial resilience
-
-### Recent Additions (v2.7)
-
-- ✅ **PyPI Package**: Installable as `axprotocol` with optional FastAPI API
-- ✅ **Config Hash**: Immutable proof that protocol config hasn't drifted
-- ✅ **Finance Domain**: High-stakes financial modeling with risk-weighted TAES
-- ✅ **Δ4 Tests**: Ledger tampering detection (forged/modified entries)
-- ✅ **Modular Architecture**: Refactored into `axp/` subpackages for maintainability
-- ✅ **Producer-Courier Handoff**: Explicit asset validation and enforcement
-- ✅ **Enhanced Logging**: Comprehensive error logging with stack traces
-
----
-
-## 🏗️ Architecture
-
-### Multi-Role Chain
-
-```
+```text
 Objective
-    ↓
-Strategist (Positioning, Audience, Messaging)
-    ↓
-Analyst (Validation, KPIs, Risk Assessment)
-    ↓
-Producer (Assets, Content, Deliverables)
-    ↓
-Courier (Schedule, Deployment, Operations)
-    ↓
-Critic (Quality Audit, Optimization, Go/No-Go)
-    ↓
-Results + TAES Scores + Ledger Entries
+   |
+   v
+Strategist
+   |
+   v
+Analyst
+   |
+   v
+Producer
+   |
+   v
+Courier
+   |
+   v
+Critic
+   |
+   v
+Results + evaluation + audit evidence
 ```
 
-### Governance Layers
+The original goal was not to claim that five prompts are inherently smarter than one. It was to make responsibilities explicit enough that behavior could be constrained, scored, inspected, and challenged at known boundaries.
 
-1. **Directive Enforcement**: Hard gates (D3, D2, D13, D20-24) and soft signals (D0, SECRETS, FABRICATION)
-2. **TAES Scoring**: Domain-specific weights applied to Logical/Practical/Probable axes
-3. **Ledger Signing**: Ed25519 signatures (HMAC fallback) for cryptographic integrity
-4. **Sentinel Verification**: Independent auditor checks signatures, hashes, and detects tampering
-5. **Config Hash**: SHA256 fingerprint of all config files stored in every entry
+## Major concepts
 
-### Deployment Architecture
+### Directive-based governance
 
-```
-┌─────────────────────────────┐
-│           Traefik           │
-│  HTTPS (ACME TLS), rate-lim │
-└────────────┬────────────────┘
-   8443 (AxP)│      │443 (Sentinel)
-             │      │
-┌────────────▼──┐  ┌▼─────────────┐
-│   AxProtocol  │  │   Sentinel   │
-│ (Streamlit/   │  │ (FastAPI:    │
-│  kernel)      │  │  /health,    │
-│               │  │  /verify,    │
-│ - writes logs │  │  /reports)   │
-│ - writes      │  │ - reads      │
-│   signed      │  │   read-only  │
-│   ledger      │  │   ledger     │
-│ - config_hash │  │ - detects    │
-│   in entries  │  │   tampering  │
-└──────┬────────┘  └──────┬───────┘
-       │                   │
-       │ mounts            │ mounts (read-only)
-┌──────▼────────┐    ┌─────▼─────────┐
-│ logs/ledger   │    │ logs/reports  │
-│ (jsonl +      │    │ (sentinel     │
-│  public key)  │    │  outputs)     │
-└───────────────┘    └───────────────┘
-```
+Protocol documents and configuration encode hard/soft governance signals and role constraints. Historical directive material is preserved under `protocol/` and `legacy/`.
+
+### TAES evaluation
+
+TAES evaluates behavior using configurable dimensions/weights. The project evolved through multiple scoring implementations, domain weights, and validation tests.
+
+### Domain specialization
+
+Role definitions exist for multiple domains, including:
+
+- marketing;
+- technical;
+- operations;
+- creative;
+- education;
+- product;
+- strategy;
+- research;
+- finance.
+
+### Config fingerprinting
+
+The project can compute a configuration fingerprint over governance/config/protocol material and attach that fingerprint to signed audit records, providing a way to detect or investigate policy drift.
+
+### Fault injection
+
+The verification suite includes adversarial/fault-injection work. Δ4 ledger-tampering tests are implemented and blocking in CI. Some historical Δ1-Δ3 wrapper paths remain unfinished/legacy and are deliberately visible as non-blocking CI rather than being represented as complete.
 
 ---
 
-## 📦 Installation
+# Repository map
 
-### Requirements
-
-- Python 3.10+
-- OpenAI API key (set `OPENAI_API_KEY` environment variable)
-
-### PyPI Installation (Recommended)
-
-```bash
-pip install axprotocol
+```text
+AxP/
+├── axprotocol/                 # Public Python import surface
+├── axp/
+│   ├── orchestration/          # Modular role-chain execution
+│   ├── governance/             # Signed ledger + governance coupling
+│   ├── directives/             # Directive loading/composition
+│   ├── detection/              # Governance signal detection
+│   ├── validation/             # Validators
+│   ├── sentinel/               # Detached Sentinel verifier/API/CLI
+│   └── utils/                  # Shared utilities/config fingerprinting
+├── config/                     # Governance, roles, TAES, logging, auth config
+├── roles/                      # Domain-specific role definitions
+├── protocol/                   # v2.4-era protocol/directive documents
+├── legacy/                     # Earlier implementations/directive history
+├── verify/                     # Verification + fault-injection tests
+├── scripts/                    # Validation/smoke/support scripts
+├── docs/                       # Restored docs + canonical architecture/history
+├── auth.py                     # Historical/current auth runtime module
+├── ledger.py                   # Main SQLite execution ledger
+├── taes_evaluation.py          # TAES evaluator + signed ledger writes
+├── domain_detector.py          # Domain routing
+├── load_roles.py               # Historical role loader still used by modular path
+├── run_axp.py                  # CLI/runtime entry point
+├── app_axp.py                  # Streamlit app
+├── sentinel_api.py             # Historical name: AxProtocol chain-execution API
+├── Dockerfile.sentinel         # Detached Sentinel container
+└── docker-compose.yml          # AxProtocol + Sentinel deployment topology
 ```
 
-**Optional Extras:**
-- `[api]` - FastAPI REST API (`fastapi`, `uvicorn`, `pydantic`)
-- `[ui]` - Streamlit UI (`streamlit`, `matplotlib`, `plotly`)
-- `[vector]` - Vector database support (`pymilvus`, `grpcio`, `ujson`)
-- `[dev]` - Development tools (`pytest`, `black`, `ruff`)
+### Naming warning: `sentinel_api.py`
 
-### Source Installation
+`sentinel_api.py` is a historical filename for the **AxProtocol chain-execution API**. It is not the detached verification service.
 
-```bash
-git clone https://github.com/yourusername/axprotocol.git
-cd AxProtocol
-pip install -r requirements.txt
+The actual detached Sentinel HTTP app is:
 
-# Development mode
-pip install -e ".[dev]"
+```text
+axp/sentinel/sentinel_app.py
 ```
 
-### Environment Setup
-
-Create `.env` file:
-```bash
-OPENAI_API_KEY=your-api-key-here
-TIER=DEV  # or PREP, CLIENT
-LOG_LEVEL=INFO
-```
+There is also an older heuristic helper at `axp/utils/sentinel.py`; it is not the cryptographic auditor either.
 
 ---
 
-## 💻 Usage
+# Running from source
 
-### Python Library
-
-```python
-from axprotocol import run_chain
-
-# Execute chain with auto-detected domain
-strategist, analyst, producer, courier, critic, results = run_chain(
-    objective="Book 5 local jobs in 7 days for a tree service"
-)
-
-# Execute with specific domain
-results = run_chain(
-    objective="Model $50k seed round ROI with NPV and IRR",
-    domain="finance"
-)
-
-# Access results
-print(f"Domain: {results['domain']}")
-print(f"Strategist TAES IV: {results['strategist']['taes']['integrity_vector']}")
-print(f"Config Hash: {results.get('config_hash', 'N/A')}")
-```
-
-### FastAPI REST API
-
-**Start Server:**
-```bash
-pip install axprotocol[api]
-uvicorn sentinel_api:app --host 0.0.0.0 --port 8000
-```
-
-**API Endpoints:**
-
-- `POST /run` - Execute AxProtocol chain
-  ```json
-  {
-    "objective": "Book 5 local jobs in 7 days",
-    "domain": "marketing",
-    "session_id": "optional-id"
-  }
-  ```
-
-- `GET /health` - Health check
-- `GET /version` - API version
-- `GET /domains` - List available domains
-- `GET /docs` - Interactive API documentation (Swagger UI)
-
-**Example Request:**
-```bash
-curl -X POST "http://localhost:8000/run" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "objective": "Model $50k seed round ROI",
-    "domain": "finance"
-  }'
-```
-
-### Streamlit UI
+A source checkout is currently the **canonical way to explore the whole project**, because several runtime resources live as repository-root config/protocol/role files and the packaging story is still being hardened.
 
 ```bash
-streamlit run app_axp.py
+git clone https://github.com/sudotsu/AxP.git
+cd AxP
+python -m venv .venv
 ```
 
-Features:
-- Objective input with domain override
-- Real-time chain execution
-- TAES score visualization
-- Ledger entry browser
-- Session history
-- Export capabilities
-
-### CLI
+Activate the environment, then install the declared stack you need. For the complete development/test surface:
 
 ```bash
-# Run with default objective
-python run_axp.py
+python -m pip install --upgrade pip
+python -m pip install ".[dev,api,ui,vector]"
+```
 
-# Run with custom objective
-python run_axp.py "Book 5 local jobs in 7 days"
+## AxProtocol runtime
 
-# Run with domain override
-python run_axp.py "Model ROI" finance
+AxProtocol model execution requires an OpenAI-compatible runtime configured by the existing code, including an API key for real model calls:
 
-# Smoke governance test (no LLM, no ledger writes)
+```bash
+export OPENAI_API_KEY="..."
+python run_axp.py "Your objective here"
+```
+
+The governance-only smoke path is designed not to require a live model call:
+
+```bash
 python run_axp.py --smoke-governance
 ```
 
----
-
-## 🌍 Domains
-
-AxProtocol supports 9 domains with domain-specific roles and TAES weights:
-
-| Domain | TAES Weights | Use Cases |
-|--------|--------------|-----------|
-| **Marketing** | L:0.3, P:0.2, Pr:0.5 | Campaigns, lead gen, content |
-| **Technical** | L:0.6, P:0.35, Pr:0.05 | Code, architecture, systems |
-| **Ops** | L:0.4, P:0.45, Pr:0.15 | Workflows, processes, efficiency |
-| **Creative** | L:0.35, P:0.25, Pr:0.4 | Content creation, storytelling |
-| **Education** | L:0.45, P:0.35, Pr:0.2 | Curriculum, training, learning |
-| **Product** | L:0.4, P:0.4, Pr:0.2 | Product dev, features, roadmap |
-| **Strategy** | L:0.45, P:0.35, Pr:0.2 | Business strategy, planning |
-| **Research** | L:0.55, P:0.3, Pr:0.15 | Data analysis, research design |
-| **Finance** | L:0.5, P:0.35, Pr:0.15 | Financial modeling, risk analysis |
-
-**Domain Auto-Detection:**
-```python
-from domain_detector import DomainDetector
-
-detector = DomainDetector()
-domain = detector.detect("Model $50k seed round ROI")
-# Returns: "finance" (with confidence score)
-```
-
----
-
-## ⚙️ Configuration
-
-### Core Config Files
-
-- **`config/governance_coupling.json`** - Hard/soft signal definitions
-- **`config/role_shapes.json`** - Role boundary enforcement (banned phrases)
-- **`config/taes_weights.json`** - Domain-specific TAES weight matrices
-- **`config/logging.yaml`** - Python logging configuration
-- **`config/auth_settings.yaml`** - Authentication settings
-- **`DomainConfig.json`** - Domain detection keywords and weights
-
-### Config Hash
-
-Every ledger entry includes a `config_hash` (SHA256) of all protocol config files:
-- Governance coupling
-- Role shapes
-- TAES weights
-- All directive markdown files
-
-**Usage:**
-```python
-from axprotocol import compute_config_hash
-from pathlib import Path
-
-hash_val = compute_config_hash(Path("."))
-# Returns: "sha256:29de65ae94973957a7fc324..."
-```
-
-**Drift Detection:**
-```python
-# Compare config hashes between sessions
-entry_a = get_last_n_entries(1)[0]
-hash_a = entry_a["config_hash"]
-
-hash_b = compute_config_hash(Path("."))
-
-if hash_a != hash_b:
-    print("⚠️ Config drift detected!")
-```
-
----
-
-## 🧪 Testing
-
-### Run Tests
+Streamlit UI:
 
 ```bash
-# All tests
-pytest verify/ -v
-
-# Specific test suites
-pytest verify/test_directive_enforcement_core.py -v
-pytest verify/test_taes_adherence.py -v
-pytest verify/test_config_hash.py -v
-pytest verify/test_fault_injection_pytest.py -v
-
-# Fault injection tests
-python fault_injection.py --run Δ1,Δ2,Δ3,Δ4
+streamlit run app_axp.py
 ```
 
-### Test Suites
+## Detached Sentinel
 
-- **Δ1**: Malformed Objectives (empty, nonsensical, contradictory)
-- **Δ2**: Score Manipulation (invalid scores, missing dimensions)
-- **Δ3**: Protocol Bypass Attempts (directive violations, unauthorized changes)
-- **Δ4**: Ledger Tampering (forged entries, signature validation)
+Sentinel's integrity-verification logic itself does not need a model API call.
 
-### Test Coverage
+CLI-style local verification:
 
-- Directive enforcement (D1-D14)
-- TAES integrity and scoring
-- Ledger signature verification
-- Config hash computation
-- Domain detection
-- Fault injection resilience
+```bash
+python -m axp.sentinel.sentinel
+```
 
----
+Detached HTTP verifier from source:
 
-## 🚢 Deployment
+```bash
+export AXP_LEDGER_DIR="$PWD/logs/ledger"
+export AXP_REPORTS_DIR="$PWD/logs/reports"
+export AXP_PUBLIC_KEY="$PWD/logs/ledger/public.key"
+uvicorn axp.sentinel.sentinel_app:app --host 127.0.0.1 --port 8080
+```
 
-### Docker Compose
+Endpoints:
+
+- `GET /health`
+- `GET /verify`
+- `GET /reports`
+
+Docker topology:
 
 ```bash
 docker compose build
-docker compose up -d
+docker compose up
 ```
 
-**Services:**
-- **AxProtocol** (Streamlit) - Port 8443
-- **Sentinel** (FastAPI) - Port 443
-- **Traefik** - Reverse proxy with TLS
-
-### Production Checklist
-
-- [ ] Set `OPENAI_API_KEY` in `.env`
-- [ ] Configure `TIER` (DEV/PREP/CLIENT)
-- [ ] Set up ACME domains in Traefik
-- [ ] Configure rate limiting
-- [ ] Set up logging rotation
-- [ ] Configure Sentinel public key path
-- [ ] Run smoke tests: `./scripts/smoke.sh`
-
-### GitHub Actions
-
-Automated build and deployment:
-- Builds Docker images
-- Pushes to GHCR
-- Deploys via SSH to VPS
-- Runs smoke tests
+The Sentinel container mounts the ledger read-only in the intended compose architecture.
 
 ---
 
-## 📁 Repository Structure
+# Verification and CI
 
-```
-AxProtocol/
-├── axprotocol/              # Public API package (PyPI)
-│   └── __init__.py
-├── axp/                     # Internal package (modular)
-│   ├── orchestration/       # Chain execution
-│   │   ├── chain.py         # Main run_chain()
-│   │   ├── role_executor.py
-│   │   ├── role_loader.py
-│   │   └── ...
-│   ├── detection/           # Governance signal detection
-│   │   └── signals.py
-│   ├── validation/          # Schema validators
-│   │   └── validators.py
-│   ├── directives/          # Directive loading/composition
-│   │   ├── loader.py
-│   │   └── composer.py
-│   ├── governance/          # Ledger signing, coupling
-│   │   ├── ledger.py
-│   │   └── coupling.py
-│   ├── sentinel/            # Sentinel auditor
-│   │   ├── sentinel.py
-│   │   ├── verify_ledger.py
-│   │   └── sentinel_app.py
-│   └── utils/               # Shared utilities
-│       ├── logging.py
-│       ├── llm.py
-│       ├── config_fingerprint.py
-│       └── ...
-├── config/                  # Configuration files
-│   ├── governance_coupling.json
-│   ├── role_shapes.json
-│   ├── taes_weights.json
-│   └── ...
-├── protocol/                # Directive markdown files
-│   ├── AxProtocol_v2.4_CORE_DIRECTIVES.md
-│   ├── AxProtocol_v2.4_TAES_EVALUATION.md
-│   └── ...
-├── roles/                   # Domain-specific role definitions
-│   ├── marketing/
-│   ├── technical/
-│   ├── finance/
-│   └── ...
-├── verify/                  # Test suites
-│   ├── test_directive_enforcement_core.py
-│   ├── test_taes_adherence.py
-│   ├── test_config_hash.py
-│   ├── test_fault_injection_delta4.py
-│   └── ...
-├── app_axp.py              # Streamlit operator console
-├── run_axp.py             # CLI entry point
-├── sentinel_api.py        # FastAPI REST API
-├── taes_evaluation.py    # TAES scoring engine
-├── domain_detector.py    # Domain auto-detection
-├── ledger.py             # SQLite audit ledger
-├── pyproject.toml        # PyPI package metadata
-├── requirements.txt      # Python dependencies
-├── docker-compose.yml    # Docker orchestration
-└── README.md
-```
+The repository now contains a clean-run GitHub Actions workflow that installs the project's declared dependencies rather than relying on whatever happens to be preinstalled on an interactive machine.
 
----
+It checks:
 
-## 🔐 Security & Auditing
+- Python source compilation;
+- governance/config validation;
+- implemented verification suites on Python 3.10, 3.11, and 3.12;
+- Δ4 tamper tests;
+- focused Sentinel tests for signed JSONL and SQLite ledgers;
+- governance smoke execution;
+- Python wheel construction;
+- expected implementation files inside the wheel;
+- installed-package imports away from the source checkout;
+- known unfinished Δ1-Δ3 fault-injection paths as visible, non-blocking work.
 
-### Ledger Integrity
-
-- **Cryptographic Signing**: Ed25519 signatures (HMAC fallback)
-- **Hash Chain**: Each entry links to previous via hash
-- **Config Hash**: SHA256 fingerprint of all config files
-- **Tampering Detection**: Sentinel verifies signatures and detects modifications
-
-### Sentinel Auditor
-
-Independent verification:
-- `/verify` - Recomputes hashes & signatures
-- Detects forged entries
-- Detects modified entries
-- Detects malformed JSON
-- Writes timestamped reports
-
-### Fault Injection Tests
-
-- **Δ1**: Malformed inputs
-- **Δ2**: Score manipulation
-- **Δ3**: Protocol bypass attempts
-- **Δ4**: Ledger tampering
-
----
-
-## 📚 Documentation
-
-- **Protocol Directives**: `protocol/AxProtocol_v2.4_*.md`
-- **PyPI Packaging**: `PYPI_PACKAGING.md`
-- **Config Hash**: `CONFIG_HASH_IMPLEMENTATION.md`
-- **Finance Domain**: `FINANCE_DOMAIN_IMPLEMENTATION.md`
-- **Δ4 Tests**: `DELTA4_IMPLEMENTATION.md`
-- **Refactoring**: `REFACTORING_SUMMARY.md`
-
----
-
-## 🤝 Contributing
-
-### Development Setup
+Run the implemented verification set locally with:
 
 ```bash
-git clone https://github.com/yourusername/axprotocol.git
-cd AxProtocol
-pip install -e ".[dev]"
-pytest verify/ -v
+pytest -q \
+  verify/test_config_hash.py \
+  verify/test_directive_enforcement_core.py \
+  verify/test_fault_injection_delta4.py \
+  verify/test_sentinel_verification.py \
+  verify/test_taes_adherence.py
 ```
 
-### Code Style
+## Packaging status
 
-- Follow PEP 8
-- Use type hints
-- Add docstrings
-- Run `black` and `ruff` before committing
+A reconciliation review found that the historical wheel configuration successfully built a package while omitting almost the entire `axp/` implementation. Package discovery has been corrected and CI now asserts that core implementation files are actually present.
 
-### Testing
+The project still has a historical source-layout issue: important runtime resources live at repository root (`config/`, `protocol/`, `roles/`, `DomainConfig.json`) and several modules resolve them relative to the checkout/current working directory. Until those resources are migrated into an install-safe package-resource layout, **a source checkout is more complete than treating the wheel as a fully self-contained distribution**.
 
-- Add tests for new features
-- Run fault injection tests: `python fault_injection.py --run Δ1,Δ2,Δ3,Δ4`
-- Ensure all security tests pass
+That limitation is explicit here so a successful wheel build is not confused with a fully production-hardened package release.
 
 ---
 
-## 📄 License
+# Historical context and recovered ZIP
 
-Evaluation license - see `AxProtocol_Evaluation_License_v0.1.txt`.
-Commercial use requires written authorization.
+This repository was reconciled against the creator's historical `AxProtocol.zip` so the remote can serve as the canonical explanation of the project.
+
+The archive itself is not committed wholesale because it contained machine/runtime state that does not belong in source control: `.env`, auth/session databases, logs, generated reports/data, caches, package metadata, and duplicate nested ZIPs.
+
+Meaningful missing documentation was restored, and the reconciliation process also uncovered/fixed real implementation issues rather than simply copying files.
+
+Read:
+
+- [`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) — origin and architectural evolution;
+- [`docs/ZIP_RECONCILIATION_2026-10-03.md`](docs/ZIP_RECONCILIATION_2026-10-03.md) — what was recovered, fixed, tested, and deliberately excluded;
+- [`docs/SENTINEL.md`](docs/SENTINEL.md) — Sentinel's design, threat model, strengths, weaknesses, and potential.
+
+## Version labels
+
+Historical material refers to v2.4, v2.5, and v2.7, while Python package metadata currently identifies the package as `2.4.0`.
+
+Those labels were not maintained as a clean semantic-release train. This repository preserves that history rather than inventing a release chronology after the fact.
 
 ---
 
-## 🎯 Key Principles
+# Current state in one sentence
 
-**Truth > Obedience**
-**Signed. Sentineled. Config-driven.**
-
----
-
-## 📞 Support
-
-- **GitHub Issues**: https://github.com/yourusername/axprotocol/issues
-- **Documentation**: See `docs/` directory
-- **API Docs**: http://localhost:8000/docs (when API running)
-
----
-
-**Version**: 2.7
-**Last Updated**: November 2025
-**Status**: Production Ready ✅
+**AxProtocol is an ambitious early attempt to make AI reasoning structured and auditable; Sentinel is the more independent verification layer that can potentially outgrow the original reasoning framework and become a general provenance/audit system of its own.**

@@ -1,0 +1,151 @@
+name: Verify AxProtocol and Sentinel
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-verification:
+    name: Core verification (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install full declared stack
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install ".[dev,api,ui,vector]"
+
+      - name: Compile source
+        run: python -m compileall -q axp axprotocol verify
+
+      - name: Validate governance configuration
+        run: |
+          python scripts/validate_governance_config.py config/governance_coupling.json
+          python scripts/validate_taes_weights.py config/taes_weights.json
+
+      - name: Run implemented verification suites
+        env:
+          OPENAI_API_KEY: "test-key-not-used-by-offline-verification"
+        run: |
+          pytest -q \
+            verify/test_config_hash.py \
+            verify/test_directive_enforcement_core.py \
+            verify/test_fault_injection_delta4.py \
+            verify/test_sentinel_verification.py \
+            verify/test_taes_adherence.py
+
+      - name: Smoke governance path
+        env:
+          OPENAI_API_KEY: "test-key-not-used-by-smoke-governance"
+          OP_AUTH_SECRET: "ci-only-op-auth-secret-0123456789abcdef"
+          OP_REFRESH_SECRET: "ci-only-refresh-secret-0123456789abcdef"
+          API_KEY_SECRET: "ci-only-api-key-secret-0123456789abcdef"
+        run: python run_axp.py --smoke-governance
+
+  package-verification:
+    name: Wheel contains the actual implementation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip build wheel setuptools
+          python -m build --wheel
+
+      - name: Assert implementation is present in wheel
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+
+          wheel = next(Path("dist").glob("*.whl"))
+          with zipfile.ZipFile(wheel) as zf:
+              names = set(zf.namelist())
+
+          required = {
+              "axprotocol/__init__.py",
+              "axp/orchestration/chain.py",
+              "axp/governance/ledger.py",
+              "axp/sentinel/verify_ledger.py",
+              "axp/utils/config_fingerprint.py",
+          }
+          missing = sorted(required - names)
+          if missing:
+              raise SystemExit(f"Wheel is missing implementation files: {missing}")
+          print(f"Wheel package check passed: {wheel}")
+          PY
+
+      - name: Install built wheel
+        run: python -m pip install --force-reinstall dist/*.whl
+
+      - name: Import installed package away from source tree
+        run: |
+          cd /tmp
+          python - <<'PY'
+          import axprotocol
+          from axp.sentinel.verify_ledger import verify_all
+          from axp.utils.config_fingerprint import compute_config_hash
+          print("installed version:", axprotocol.__version__)
+          print("public package import without credentials: OK")
+          print("Sentinel verifier import: OK")
+          print("config fingerprint import: OK")
+          PY
+
+  unfinished-fault-injection:
+    name: Known unfinished Δ1-Δ3 fault-injection suites
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test/runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[dev]"
+
+      - name: Run full fault-injection wrapper
+        env:
+          OPENAI_API_KEY: "test-key-no-network-calls-expected"
+        run: pytest -q verify/test_fault_injection_pytest.py
+
+      - name: Explain current status
+        if: failure()
+        run: |
+          echo "Δ1-Δ3 include unfinished/legacy test paths."
+          echo "This job is intentionally non-blocking until those suites are implemented."
+          echo "Δ4 ledger-tampering and focused Sentinel tests remain blocking."
