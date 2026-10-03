@@ -1,15 +1,15 @@
 # AxProtocol ZIP Reconciliation — 2026-10-03
 
-This document records the reconciliation of the attached historical `AxProtocol.zip` into the canonical GitHub repository.
+This document records the reconciliation of the historical `AxProtocol.zip` into the canonical GitHub repository.
 
 ## Source archive
 
 - Archive: `AxProtocol.zip`
 - SHA-256: `9ac2c44ec3c0f63c92a537a8bb208119f86dc03a926046d943d51c214f51e226`
-- Extracted project files observed: 348
+- Extracted project files observed during reconciliation: 348
 - Approximate extracted size: 3.7 MB
 
-The goal of this reconciliation is that future explanations of the project can point to the repository instead of requiring the ZIP again.
+The goal is that future explanations of the project can point to the repository instead of requiring the ZIP again.
 
 ## Canonical repository selected
 
@@ -43,68 +43,108 @@ The most meaningful missing material was documentation/history rather than a sec
 
 ## Restored or added to the repository
 
-This reconciliation restores missing documentation from the archive and adds new canonical documentation that explains the repository as it exists now.
+Restored ZIP documentation includes configuration, app/dashboard/auth, and implementation-history material under `docs/`.
 
-Restored documentation includes configuration, app/dashboard/auth, and implementation history under `docs/`.
-
-New documentation includes:
+New canonical documentation includes:
 
 - `docs/PROJECT_HISTORY.md`
 - `docs/SENTINEL.md`
+- `docs/auth_dashboard_docs/ARCHIVE_INDEX.md`
 - this reconciliation record
+- a rewritten top-level `README.md`
 
-The README is also being revised so the repository can stand alone as the explanation of the project.
+The README now frames the project as two coupled systems: AxProtocol as producer/reasoning/governance and Sentinel as a separate auditor.
 
 ## Important code issues discovered during reconciliation
 
-The ZIP review was not treated as a simple file-copy exercise. Running and inspecting the code exposed several concrete issues.
+The ZIP review was not treated as a simple file-copy exercise. Running and inspecting the code exposed concrete architectural and implementation issues.
 
 ### Sentinel hash verification mismatch
 
-The ledger writer stores:
+The signed JSONL writer stores:
 
 ```text
 entry.hash = SHA256(entry.data)
 ```
 
-One detached Sentinel verifier was instead hashing the entire `entry` object and comparing that digest to `entry.hash`, causing valid records to be reported as mismatches.
+One detached Sentinel verifier was instead hashing the entire `entry` object and comparing that digest to `entry.hash`, causing legitimate records to be reported as mismatches.
 
-The reconciliation fixes the verifier to match the writer's contract and adds focused Sentinel tests.
+The verifier now matches the writer's actual contract and has focused tests for clean, modified, malformed, and unauthenticated records.
 
 ### Incorrect Sentinel entry counts
 
-Both Sentinel verification paths counted error records rather than actual records examined. A clean ledger could therefore report zero entries checked.
+Historical Sentinel paths reported the number of error details as `entries_checked`. A clean ledger could therefore claim that zero entries were examined.
 
-The reconciliation fixes the counters.
+The counters now count actual non-empty records processed.
+
+### Sentinel originally covered only one of two ledgers
+
+The repository contains two distinct audit mechanisms:
+
+1. the main role-execution path writes a SQLite hash chain through top-level `ledger.py`;
+2. TAES/governance paths write signed JSONL records through `axp/governance/ledger.py`.
+
+Detached Sentinel historically verified only the signed JSONL stream.
+
+It now verifies **both**:
+
+- signed JSONL data hashes/signatures;
+- the SQLite `previous_hash` links and recomputed `current_hash` values, opening the DB read-only.
+
+This makes Sentinel materially relevant to the actual role-execution chain instead of only to a side evidence stream.
 
 ### Missing-key behavior
 
-A verifier without its public verification key cannot establish authenticity. The detached verifier now fails closed instead of allowing a clean overall result while silently skipping signature verification.
+A signed-record verifier without its verification key cannot establish authenticity. Sentinel now fails closed for that signed stream rather than silently skipping signature verification while returning a clean result.
 
 ### Offline utility coupling to OpenAI
 
 Importing offline utilities such as config fingerprinting executed `axp.utils.__init__`, which eagerly imported the OpenAI client. That made non-LLM verification/tooling depend on the model SDK unnecessarily.
 
-The package initializer now exposes LLM helpers lazily so offline audit utilities can be imported independently.
+LLM helpers are now exposed lazily so offline audit utilities can be imported independently.
 
-### Wheel omitted the implementation
+### Detached Sentinel API import path
+
+`axp/sentinel/sentinel_app.py` historically used a top-level `from verify_ledger import verify_all`, matching its Docker copy layout but not a normal source/package import.
+
+It now prefers the package-relative import and retains a Docker-compatible fallback.
+
+### Historical naming collision
+
+`sentinel_api.py` is actually the AxProtocol chain-execution FastAPI service (`POST /run`), not the detached Sentinel auditor.
+
+The detached audit API is `axp/sentinel/sentinel_app.py`.
+
+The new README and Sentinel documentation call this out explicitly rather than perpetuating the ambiguous naming.
+
+### Wheel omitted most of the implementation
 
 The historical `pyproject.toml` explicitly listed only `axprotocol` and `axp` as packages. The resulting wheel built successfully but contained essentially only `axprotocol/__init__.py`, omitting the actual `axp/*` implementation.
 
 A local reproduction produced an approximately 8 KB wheel with no orchestration/Sentinel implementation.
 
-The reconciliation switches setuptools to namespace-aware package discovery. A local rebuild produced an approximately 45 KB wheel containing files such as:
+Package discovery now uses namespace-aware setuptools discovery, and the historical top-level modules still required by the modular chain are explicitly packaged. CI asserts the presence of representative orchestration, governance, Sentinel, and utility modules in the wheel.
 
-- `axp/orchestration/chain.py`
-- `axp/governance/ledger.py`
-- `axp/sentinel/verify_ledger.py`
-- `axp/utils/config_fingerprint.py`
+A local rebuild after the first package-discovery correction grew to approximately 45 KB and contained the previously omitted `axp/*` implementation.
 
-CI now checks wheel contents explicitly so a "successful" empty package build cannot silently recur.
+### Packaging is improved, but source checkout remains canonical
+
+The code/package-discovery failure above is fixed, but the project still has a historical layout limitation: runtime resources such as
+
+```text
+config/
+protocol/
+roles/
+DomainConfig.json
+```
+
+live at repository root and multiple modules resolve them relative to a source checkout/current working directory.
+
+Those resources have not yet been migrated into one install-safe package-resource scheme. The README therefore explicitly treats a source checkout as the canonical complete runtime rather than claiming that a successful wheel build is a fully self-contained production distribution.
 
 ### Fault-injection suite status
 
-After removing accidental LLM import coupling and running the verification suite in a clean local ledger state, the implemented suites largely pass. The historical Δ1-Δ3 wrapper still contains explicitly unfinished/legacy paths, including a score-manipulation class that prints `Not yet implemented`.
+After removing accidental LLM import coupling and running verification in a clean ledger state, the implemented suites largely pass. The historical Δ1-Δ3 wrapper still contains explicitly unfinished/legacy paths, including a score-manipulation class that reports `Not yet implemented`.
 
 CI therefore distinguishes:
 
@@ -112,6 +152,14 @@ CI therefore distinguishes:
 - non-blocking known unfinished Δ1-Δ3 fault-injection work.
 
 This preserves the unfinished state visibly rather than pretending those tests are complete.
+
+## Historical auth/dashboard delivery documents
+
+The ZIP contains several large v2.5 delivery documents using phrases such as `PRODUCTION HARDENED`, `PRODUCTION READY`, and speculative ROI/value claims.
+
+They are useful as historical evidence of how the project was being developed and described, but they are repetitive and should not be promoted as current verified claims.
+
+Instead of copying those assertions into canonical documentation, `docs/auth_dashboard_docs/ARCHIVE_INDEX.md` inventories the files, sizes, and subjects and clearly marks them as historical delivery material.
 
 ## Files deliberately not copied from the ZIP
 
@@ -188,8 +236,8 @@ A new GitHub Actions workflow installs the declared project stack on clean hoste
 - package installation;
 - source compilation;
 - governance/config validation;
-- implemented verification suites;
-- Sentinel contract tests;
+- implemented verification suites on supported Python versions;
+- signed-ledger and SQLite Sentinel contract tests;
 - governance smoke testing;
 - wheel building;
 - wheel content assertions;
@@ -210,9 +258,10 @@ After this work, the repository is intended to be the canonical reference for:
 
 - what AxProtocol was trying to do;
 - how the multi-role/governance system works;
-- why Sentinel is a distinct audit component;
+- why Sentinel is a distinct and potentially more general audit component;
+- both audit-ledger formats and their actual guarantees;
 - the meaningful historical documentation recovered from the ZIP;
 - known weaknesses and unfinished areas;
 - and the current reproducible verification/package state.
 
-The original archive hash above remains here as provenance, but routine project explanation should no longer require attaching the ZIP.
+The original archive hash above remains as provenance, but routine project explanation should no longer require attaching the ZIP.
