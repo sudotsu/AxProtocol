@@ -33,12 +33,21 @@ except ImportError:
 logger = logging.getLogger("axprotocol.sentinel")
 
 PUB_KEY_ENV = "AXP_PUBLIC_KEY"
-PUB_KEY_FILE = os.environ.get(PUB_KEY_ENV, "/audit/ledger/public.key")
+# When unset, Sentinel discovers public.key inside the ledger directory passed
+# to verify_all(). Keeping this mutable also makes isolated tests straightforward.
+PUB_KEY_FILE = os.environ.get(PUB_KEY_ENV)
 SQLITE_LEDGER_NAME = "audit_ledger.db"
 
 
 def _verify_sig(entry: Dict[str, Any], sig_hex: str, pubkey: bytes) -> bool:
-    """Verify the signature over canonical JSON for a signed JSONL entry."""
+    """Verify the signature over canonical JSON for a signed JSONL entry.
+
+    Current Ed25519 records store a detached 64-byte signature. Historical
+    records produced before the signature-contract fix stored PyNaCl's complete
+    ``SignedMessage`` (64-byte signature followed by the payload) as hex. The
+    latter format is accepted only when its recovered payload exactly matches
+    the canonical entry being verified.
+    """
     if not _HAVE_NACL:
         # Compatibility fallback. This is symmetric authentication, not a true
         # detached public-key trust boundary; see docs/SENTINEL.md.
@@ -51,8 +60,24 @@ def _verify_sig(entry: Dict[str, Any], sig_hex: str, pubkey: bytes) -> bool:
 
     try:
         msg = json.dumps(entry, sort_keys=True).encode()
-        VerifyKey(pubkey).verify(msg, bytes.fromhex(sig_hex))
-        return True
+        signature = bytes.fromhex(sig_hex)
+        verify_key = VerifyKey(pubkey)
+
+        if len(signature) == 64:
+            verify_key.verify(msg, signature)
+            return True
+
+        # Backward compatibility for records created with
+        # SigningKey.sign(payload).hex() instead of .signature.hex().
+        if len(signature) == 64 + len(msg):
+            recovered = verify_key.verify(signature)
+            return recovered == msg
+
+        logger.warning(
+            "Signature verification error: invalid Ed25519 signature length %s",
+            len(signature),
+        )
+        return False
     except BadSignatureError:
         return False
     except Exception as e:
@@ -79,7 +104,7 @@ def _verify_jsonl(ledger_path: Path) -> Dict[str, Any]:
     entries_checked = 0
     pubkey: Optional[bytes] = None
 
-    pubkey_path = Path(PUB_KEY_FILE)
+    pubkey_path = Path(PUB_KEY_FILE) if PUB_KEY_FILE else ledger_path / "public.key"
     if pubkey_path.exists():
         try:
             pubkey = pubkey_path.read_bytes()
