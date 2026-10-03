@@ -69,7 +69,7 @@ Issues = "https://github.com/sudotsu/AxP/issues"
 
 # AxP uses a namespace-style top-level `axp/` directory with implementation
 # subpackages. Explicitly listing only `axp` produced a wheel containing almost
-# none of the implementation. Discover the complete package tree instead.
+# none of the implementation, so discover the complete package tree.
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["axprotocol*", "axp*"]
@@ -77,6 +77,17 @@ namespaces = true
 
 [tool.setuptools]
 include-package-data = true
+# The modular chain still imports these historical top-level modules. They are
+# part of the runtime until those imports are fully migrated under `axp/`.
+py-modules = [
+    "auth",
+    "domain_detector",
+    "ledger",
+    "load_roles",
+    "score_validator",
+    "taes_evaluation",
+    "sentinel_api",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["verify"]
