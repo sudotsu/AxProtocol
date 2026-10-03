@@ -39,8 +39,8 @@ jobs:
 
       - name: Validate governance configuration
         run: |
-          python scripts/validate_governance_config.py
-          python scripts/validate_taes_weights.py
+          python scripts/validate_governance_config.py config/governance_coupling.json
+          python scripts/validate_taes_weights.py config/taes_weights.json
 
       - name: Run implemented verification suites
         env:
@@ -110,6 +110,7 @@ jobs:
           from axp.sentinel.verify_ledger import verify_all
           from axp.utils.config_fingerprint import compute_config_hash
           print("installed version:", axprotocol.__version__)
+          print("public package import without credentials: OK")
           print("Sentinel verifier import: OK")
           print("config fingerprint import: OK")
           PY
